@@ -1,0 +1,288 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* JetBrains Mono - for numeric/tabular data */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono[wght].woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Geist Mono - for code-style labels */
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/assets/fonts/GeistMono[wght].woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Sora - primary UI font */
+@font-face {
+  font-family: "Sora";
+  src: url("/assets/fonts/Sora[wght].woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    color-scheme: dark;
+
+    /* === SNIPER TRADE JOURNAL — DARK TRADING DASHBOARD === */
+    /* Deep near-black backgrounds */
+    --background: 0.13 0.01 240;
+    --foreground: 0.92 0.01 220;
+
+    --card: 0.17 0.015 240;
+    --card-foreground: 0.92 0.01 220;
+
+    --popover: 0.15 0.015 240;
+    --popover-foreground: 0.92 0.01 220;
+
+    /* Electric teal/cyan primary */
+    --primary: 0.78 0.16 195;
+    --primary-foreground: 0.1 0.01 240;
+
+    --secondary: 0.22 0.02 240;
+    --secondary-foreground: 0.8 0.01 220;
+
+    --muted: 0.2 0.015 240;
+    --muted-foreground: 0.55 0.02 230;
+
+    /* Amber accent for grades/highlights */
+    --accent: 0.78 0.15 65;
+    --accent-foreground: 0.1 0.01 240;
+
+    /* Red destructive */
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.98 0.01 40;
+
+    --border: 0.25 0.02 240;
+    --input: 0.2 0.02 240;
+    --ring: 0.78 0.16 195;
+
+    /* Trading-specific color tokens */
+    /* Win / positive */
+    --trade-win: 0.72 0.2 155;
+    --trade-win-muted: 0.25 0.06 155;
+
+    /* Loss / negative */
+    --trade-loss: 0.6 0.22 25;
+    --trade-loss-muted: 0.22 0.06 25;
+
+    /* Break even / neutral */
+    --trade-be: 0.55 0.02 230;
+    --trade-be-muted: 0.2 0.02 230;
+
+    /* Teal accent */
+    --teal: 0.78 0.16 195;
+    --teal-muted: 0.2 0.08 195;
+
+    /* Gold/amber for grades */
+    --gold: 0.82 0.15 75;
+    --gold-muted: 0.22 0.06 75;
+
+    /* Sidebar */
+    --sidebar: 0.11 0.01 240;
+    --sidebar-foreground: 0.85 0.01 220;
+    --sidebar-primary: 0.78 0.16 195;
+    --sidebar-primary-foreground: 0.1 0.01 240;
+    --sidebar-accent: 0.2 0.02 240;
+    --sidebar-accent-foreground: 0.92 0.01 220;
+    --sidebar-border: 0.2 0.02 240;
+    --sidebar-ring: 0.78 0.16 195;
+
+    /* Charts */
+    --chart-1: 0.78 0.16 195;
+    --chart-2: 0.72 0.2 155;
+    --chart-3: 0.6 0.22 25;
+    --chart-4: 0.82 0.15 75;
+    --chart-5: 0.68 0.12 280;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Sora", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numbers for all price/stat data */
+  .tabular-nums,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Custom scrollbar for trading dashboard */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: oklch(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--muted-foreground));
+  }
+}
+
+@layer utilities {
+  /* Trading win/loss/be colors */
+  .text-trade-win {
+    color: oklch(var(--trade-win));
+  }
+  .bg-trade-win {
+    background-color: oklch(var(--trade-win));
+  }
+  .bg-trade-win-muted {
+    background-color: oklch(var(--trade-win-muted));
+  }
+  .border-trade-win {
+    border-color: oklch(var(--trade-win));
+  }
+  .text-trade-loss {
+    color: oklch(var(--trade-loss));
+  }
+  .bg-trade-loss {
+    background-color: oklch(var(--trade-loss));
+  }
+  .bg-trade-loss-muted {
+    background-color: oklch(var(--trade-loss-muted));
+  }
+  .border-trade-loss {
+    border-color: oklch(var(--trade-loss));
+  }
+  .text-trade-be {
+    color: oklch(var(--trade-be));
+  }
+  .bg-trade-be {
+    background-color: oklch(var(--trade-be));
+  }
+  .bg-trade-be-muted {
+    background-color: oklch(var(--trade-be-muted));
+  }
+
+  /* Teal */
+  .text-teal {
+    color: oklch(var(--teal));
+  }
+  .bg-teal {
+    background-color: oklch(var(--teal));
+  }
+  .bg-teal-muted {
+    background-color: oklch(var(--teal-muted));
+  }
+  .border-teal {
+    border-color: oklch(var(--teal));
+  }
+
+  /* Gold */
+  .text-gold {
+    color: oklch(var(--gold));
+  }
+  .bg-gold {
+    background-color: oklch(var(--gold));
+  }
+  .bg-gold-muted {
+    background-color: oklch(var(--gold-muted));
+  }
+  .border-gold {
+    border-color: oklch(var(--gold));
+  }
+
+  /* Grid line pattern for dashboard bg */
+  .bg-grid-pattern {
+    background-image: linear-gradient(
+        oklch(0.25 0.02 240 / 0.3) 1px,
+        transparent 1px
+      ), linear-gradient(90deg, oklch(0.25 0.02 240 / 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Glow effects */
+  .glow-teal {
+    box-shadow: 0 0 20px oklch(var(--teal) / 0.3);
+  }
+  .glow-win {
+    box-shadow: 0 0 20px oklch(var(--trade-win) / 0.3);
+  }
+  .glow-loss {
+    box-shadow: 0 0 20px oklch(var(--trade-loss) / 0.3);
+  }
+
+  /* Card hover animation */
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s
+      ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 30px oklch(0 0 0 / 0.4);
+  }
+
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease forwards;
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Stagger children */
+  .stagger-children > *:nth-child(1) {
+    animation-delay: 0.05s;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 0.10s;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 0.15s;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 0.20s;
+  }
+  .stagger-children > *:nth-child(5) {
+    animation-delay: 0.25s;
+  }
+  .stagger-children > *:nth-child(6) {
+    animation-delay: 0.30s;
+  }
+  .stagger-children > *:nth-child(7) {
+    animation-delay: 0.35s;
+  }
+
+  /* Font utilities */
+  .font-jetbrains {
+    font-family: "JetBrains Mono", monospace;
+  }
+  .font-geist-mono {
+    font-family: "Geist Mono", monospace;
+  }
+}
