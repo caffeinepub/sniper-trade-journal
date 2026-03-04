@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useActor } from "@/hooks/useActor";
 import {
   useCreateTrade,
   useGetTradeById,
@@ -329,6 +330,7 @@ export default function TradeFormPage({
   const createTrade = useCreateTrade();
   const updateTrade = useUpdateTrade();
   const { identity } = useInternetIdentity();
+  const { actor, isFetching: isActorLoading } = useActor();
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -516,6 +518,12 @@ export default function TradeFormPage({
       return;
     }
 
+    // Actor not ready yet — backend connection still initializing
+    if (!actor || isActorLoading) {
+      toast.info("Connecting to backend, please try again in a moment...");
+      return;
+    }
+
     // Validate
     const validationErrors = validateForm(form);
     setErrors(validationErrors);
@@ -537,14 +545,16 @@ export default function TradeFormPage({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save trade";
-      if (
-        message.includes("authenticated") ||
-        message.includes("Not") ||
-        message.includes("auth")
-      ) {
+      // Only show sign-in prompt if identity is truly missing, not for connection errors
+      if (!identity) {
         toast.error("Please sign in to save trades");
+      } else if (
+        message.includes("Unauthorized") ||
+        message.includes("not registered")
+      ) {
+        toast.error("Session expired. Please sign out and sign in again.");
       } else {
-        toast.error(message);
+        toast.error(message || "Failed to save trade. Please try again.");
       }
     }
   };
@@ -553,6 +563,12 @@ export default function TradeFormPage({
     // Auth guard
     if (!identity) {
       toast.error("Please sign in to save trades");
+      return;
+    }
+
+    // Actor not ready yet — backend connection still initializing
+    if (!actor || isActorLoading) {
+      toast.info("Connecting to backend, please try again in a moment...");
       return;
     }
 
@@ -571,14 +587,15 @@ export default function TradeFormPage({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save trade";
-      if (
-        message.includes("authenticated") ||
-        message.includes("Not") ||
-        message.includes("auth")
-      ) {
+      if (!identity) {
         toast.error("Please sign in to save trades");
+      } else if (
+        message.includes("Unauthorized") ||
+        message.includes("not registered")
+      ) {
+        toast.error("Session expired. Please sign out and sign in again.");
       } else {
-        toast.error(message);
+        toast.error(message || "Failed to save trade. Please try again.");
       }
     }
   };
@@ -1094,11 +1111,16 @@ export default function TradeFormPage({
             <Button
               data-ocid="trade.form.submit_button"
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isActorLoading}
               className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold"
               size="lg"
             >
-              {isPending ? (
+              {isActorLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   {isEdit ? "Updating..." : "Saving..."}
@@ -1113,7 +1135,7 @@ export default function TradeFormPage({
               <Button
                 data-ocid="trade.form.save_add_button"
                 type="button"
-                disabled={isPending}
+                disabled={isPending || isActorLoading}
                 variant="outline"
                 size="lg"
                 className="flex-1 sm:flex-none border-teal/30 text-teal hover:bg-teal-muted font-semibold"
