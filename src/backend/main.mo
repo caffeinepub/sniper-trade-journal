@@ -1,27 +1,28 @@
+import Migration "migration";
 import Map "mo:core/Map";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
 import Text "mo:core/Text";
 import Iter "mo:core/Iter";
-
-import Nat "mo:core/Nat";
 import Float "mo:core/Float";
-import Set "mo:core/Set";
 import Int "mo:core/Int";
+import Set "mo:core/Set";
+import Nat "mo:core/Nat";
 import Time "mo:core/Time";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 
-
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
-  // Initialize the access control system
+  // Access Control state
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
+  // Types
   type Trade = {
     id : Text;
     owner : Principal;
@@ -104,8 +105,9 @@ actor {
     name : Text;
   };
 
-  let trades = Map.empty<Text, Trade>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
+  // Persistent storage MUST use stable let
+  stable let trades = Map.empty<Text, Trade>();
+  stable let userProfiles = Map.empty<Principal, UserProfile>();
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -129,12 +131,13 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Trade Functions
+  // UUID Generation
   func generateUUID(caller : Principal, timestamp : Int) : Text {
     let ts = Int.abs(timestamp);
     caller.toText() # "_" # ts.toText();
   };
 
+  // Trade Functions
   public shared ({ caller }) func createTrade(input : TradeInput) : async Trade {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create trades");
@@ -256,18 +259,13 @@ actor {
   };
 
   public query ({ caller }) func getTradeById(id : Text) : async ?Trade {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view trades");
-    };
-
     switch (trades.get(id)) {
       case (null) { null };
       case (?trade) {
-        // Only return the trade if the caller is the owner or an admin
         if (Principal.equal(caller, trade.owner) or AccessControl.isAdmin(accessControlState, caller)) {
           ?trade;
         } else {
-          Runtime.trap("Unauthorized: Can only view your own trades");
+          Runtime.trap("Unauthorized: Cannot view this trade");
         };
       };
     };
@@ -330,14 +328,22 @@ actor {
     var ruled = 0;
     var exitedEarly = 0;
     var movedStop = 0;
+    var totalWinRMultiple = 0.0;
+    var totalLossRMultiple = 0.0;
+    var winCountWinR = 0;
+    var lossCountLossR = 0;
 
     for (trade in tradesArray.values()) {
       switch (trade.result) {
         case ("Win") {
           wins += 1;
+          totalWinRMultiple += trade.rMultiple;
+          winCountWinR += 1;
         };
         case ("Loss") {
           losses += 1;
+          totalLossRMultiple += trade.rMultiple;
+          lossCountLossR += 1;
         };
         case ("BreakEven") {
           breakEvens += 1;
@@ -355,7 +361,7 @@ actor {
     };
 
     let winRate = if (total == 0) { 0.0 } else {
-      (100.0 * Int.abs(wins - losses).toFloat()) / total.toFloat();
+      ((wins.toFloat() / total.toFloat()) * 100.0);
     };
 
     let avgRR = if (total == 0) { 0.0 } else {
@@ -366,9 +372,25 @@ actor {
       totalRMultiple / total.toFloat();
     };
 
+    let avgWinR = if (winCountWinR > 0) {
+      totalWinRMultiple / winCountWinR.toFloat();
+    } else { 0.0 };
+
+    let avgLossR = if (lossCountLossR > 0) {
+      Int.abs(totalLossRMultiple.toInt()).toFloat() / lossCountLossR.toFloat(); // Always positive
+    } else { 0.0 };
+
     let followedRulesPercent = (ruled.toFloat() / total.toFloat()) * 100.0;
     let exitedEarlyPercent = (exitedEarly.toFloat() / total.toFloat()) * 100.0;
     let movedStopLossPercent = (movedStop.toFloat() / total.toFloat()) * 100.0;
+
+    let profitFactor = if (totalLossRMultiple == 0.0) {
+      if (totalWinRMultiple != 0.0) { 99.99 } else { 0.0 };
+    } else {
+      totalWinRMultiple / Int.abs(totalLossRMultiple.toInt()).toFloat();
+    };
+
+    let expectancy = (winRate / 100.0 * avgWinR) - ((1.0 - winRate / 100.0) * avgLossR);
 
     {
       totalTrades = total;
@@ -379,8 +401,8 @@ actor {
       avgRR;
       avgRMultiple;
       totalNetR;
-      profitFactor = 0.0;
-      expectancy = 0.0;
+      profitFactor;
+      expectancy;
       followedRulesPercent;
       exitedEarlyPercent;
       movedStopLossPercent;
