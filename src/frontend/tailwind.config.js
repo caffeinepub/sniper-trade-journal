@@ -71,11 +71,11 @@ export default {
                     border: 'oklch(var(--sidebar-border))',
                     ring: 'oklch(var(--sidebar-ring))'
                 },
-                teal: 'oklch(var(--teal))',
-                gold: 'oklch(var(--gold))',
-                'trade-win': 'oklch(var(--trade-win))',
-                'trade-loss': 'oklch(var(--trade-loss))',
-                'trade-be': 'oklch(var(--trade-be))',
+                teal: 'oklch(var(--teal) / <alpha-value>)',
+                gold: 'oklch(var(--gold) / <alpha-value>)',
+                'trade-win': 'oklch(var(--trade-win) / <alpha-value>)',
+                'trade-loss': 'oklch(var(--trade-loss) / <alpha-value>)',
+                'trade-be': 'oklch(var(--trade-be) / <alpha-value>)',
             },
             borderRadius: {
                 lg: 'var(--radius)',

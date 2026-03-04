@@ -52,9 +52,91 @@ import {
   X,
   ZoomIn,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import type { ExternalBlob, Trade } from "../backend.d";
+
+/** Lightbox with Escape key, swipe-to-dismiss, and natural image size. */
+function ScreenshotLightbox({
+  url,
+  onClose,
+  ocidPrefix,
+}: {
+  url: string;
+  onClose: () => void;
+  ocidPrefix: string;
+}) {
+  const touchStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  // Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Swipe-to-dismiss (vertical or horizontal swipe > 60px)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current === null || touchStartX.current === null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(dy) > 60 || Math.abs(dx) > 60) onClose();
+    touchStartY.current = null;
+    touchStartX.current = null;
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+      data-ocid={`${ocidPrefix}.lightbox.modal`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-colors z-10"
+        onClick={onClose}
+        aria-label="Close lightbox"
+        data-ocid={`${ocidPrefix}.lightbox.close_button`}
+      >
+        <X className="w-5 h-5" />
+      </button>
+      {/* Click-outside backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 w-full h-full cursor-default"
+        aria-label="Close lightbox overlay"
+        onClick={onClose}
+      />
+      {/* Image at natural size, capped so it doesn't overflow viewport */}
+      <img
+        src={url}
+        alt="Trade screenshot"
+        className="relative z-10 rounded-md"
+        style={{
+          maxWidth: "min(95vw, 100%)",
+          maxHeight: "90vh",
+          width: "auto",
+          height: "auto",
+          objectFit: "contain",
+        }}
+      />
+      <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-white/40 text-xs pointer-events-none">
+        Press Esc or swipe to close
+      </p>
+    </div>,
+    document.body,
+  );
+}
 
 interface JournalPageProps {
   onNavigate: (page: AppPage, tradeId?: string) => void;
@@ -432,33 +514,13 @@ function TradeDetailModal({
         </DialogContent>
       </Dialog>
 
-      {/* Full-size lightbox */}
+      {/* Full-size lightbox — rendered via portal to guarantee it sits above Dialog (z-50) */}
       {lightboxOpen && screenshotUrl && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
-          data-ocid="screenshot.lightbox.modal"
-        >
-          <button
-            type="button"
-            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-colors z-10"
-            onClick={() => setLightboxOpen(false)}
-            aria-label="Close lightbox"
-            data-ocid="screenshot.lightbox.close_button"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            className="absolute inset-0 w-full h-full cursor-default"
-            aria-label="Close lightbox overlay"
-            onClick={() => setLightboxOpen(false)}
-          />
-          <img
-            src={screenshotUrl}
-            alt="Trade screenshot full size"
-            className="relative z-10 max-w-full max-h-full object-contain rounded-md"
-          />
-        </div>
+        <ScreenshotLightbox
+          url={screenshotUrl}
+          onClose={() => setLightboxOpen(false)}
+          ocidPrefix="screenshot.detail"
+        />
       )}
     </>
   );
@@ -778,125 +840,153 @@ function TradeCard({
   const resultBg = getResultBg(trade.result);
   const dirColor = getDirectionColor(trade.direction);
   const screenshotUrl = useScreenshotUrl(trade.screenshot);
+  const [cardLightboxOpen, setCardLightboxOpen] = useState(false);
 
   return (
-    <Card
-      data-ocid={`journal.trade.item.${index}`}
-      className="bg-card border-border card-hover cursor-pointer animate-fade-in"
-      onClick={onClick}
-    >
-      <CardContent className="p-3">
-        <div className="flex items-center gap-3">
-          {/* Result indicator */}
-          <div
-            className={cn(
-              "w-1 self-stretch rounded-full shrink-0",
-              trade.result === "Win"
-                ? "bg-trade-win"
-                : trade.result === "Loss"
-                  ? "bg-trade-loss"
-                  : "bg-trade-be",
-            )}
-          />
+    <>
+      <Card
+        data-ocid={`journal.trade.item.${index}`}
+        className="bg-card border-border card-hover cursor-pointer animate-fade-in"
+        onClick={onClick}
+      >
+        <CardContent className="p-3">
+          <div className="flex items-center gap-3">
+            {/* Result indicator */}
+            <div
+              className={cn(
+                "w-1 self-stretch rounded-full shrink-0",
+                trade.result === "Win"
+                  ? "bg-trade-win"
+                  : trade.result === "Loss"
+                    ? "bg-trade-loss"
+                    : "bg-trade-be",
+              )}
+            />
 
-          {/* Main info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-bold text-sm text-foreground font-mono">
-                {trade.symbol}
-              </span>
-              <Badge
-                className={cn("text-[10px] px-1.5 py-0 border", resultBg)}
-                variant="outline"
-              >
-                {trade.result === "BreakEven" ? "B/E" : trade.result}
-              </Badge>
-              <span className={cn("text-xs font-semibold", dirColor)}>
-                {trade.direction === "Long" ? (
-                  <TrendingUp className="w-3 h-3 inline" />
-                ) : (
-                  <TrendingDown className="w-3 h-3 inline" />
-                )}{" "}
-                {trade.direction}
-              </span>
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 border-gold/30 text-gold bg-gold-muted ml-auto hidden md:flex"
-              >
-                {displayGrade(trade.setupGrade)}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{formatDate(trade.date)}</span>
-              <span className="hidden sm:block">·</span>
-              <span className="hidden sm:block">
-                {displaySession(trade.session)}
-              </span>
-              <span className="hidden sm:block">·</span>
-              <span className="hidden sm:block">{trade.timeframe}</span>
-              {trade.setupType && (
-                <span className="hidden md:block truncate max-w-32">
-                  · {trade.setupType}
+            {/* Main info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-bold text-sm text-foreground font-mono">
+                  {trade.symbol}
                 </span>
+                <Badge
+                  className={cn("text-[10px] px-1.5 py-0 border", resultBg)}
+                  variant="outline"
+                >
+                  {trade.result === "BreakEven" ? "B/E" : trade.result}
+                </Badge>
+                <span className={cn("text-xs font-semibold", dirColor)}>
+                  {trade.direction === "Long" ? (
+                    <TrendingUp className="w-3 h-3 inline" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3 inline" />
+                  )}{" "}
+                  {trade.direction}
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 border-gold/30 text-gold bg-gold-muted ml-auto hidden md:flex"
+                >
+                  {displayGrade(trade.setupGrade)}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{formatDate(trade.date)}</span>
+                <span className="hidden sm:block">·</span>
+                <span className="hidden sm:block">
+                  {displaySession(trade.session)}
+                </span>
+                <span className="hidden sm:block">·</span>
+                <span className="hidden sm:block">{trade.timeframe}</span>
+                {trade.setupType && (
+                  <span className="hidden md:block truncate max-w-32">
+                    · {trade.setupType}
+                  </span>
+                )}
+              </div>
+              {trade.tags.length > 0 && (
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                  <Tag className="w-2.5 h-2.5 text-teal/60 shrink-0" />
+                  {trade.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-muted text-teal border border-teal/15"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {trade.tags.length > 3 && (
+                    <span className="text-[10px] text-muted-foreground">
+                      +{trade.tags.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Screenshot thumbnail — click opens full lightbox directly */}
+              {screenshotUrl && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <button
+                    type="button"
+                    className="relative group w-full text-left rounded-md overflow-hidden"
+                    aria-label="View screenshot full size"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCardLightboxOpen(true);
+                    }}
+                    data-ocid="trade.card.screenshot.open_modal_button"
+                  >
+                    <img
+                      src={screenshotUrl}
+                      alt="Trade screenshot"
+                      loading="lazy"
+                      className="w-full h-20 object-cover rounded-md opacity-80 group-hover:opacity-100 transition-opacity"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-black/60 rounded-full p-1.5">
+                        <ZoomIn className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                  </button>
+                </div>
               )}
             </div>
-            {trade.tags.length > 0 && (
-              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                <Tag className="w-2.5 h-2.5 text-teal/60 shrink-0" />
-                {trade.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-muted text-teal border border-teal/15"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {trade.tags.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{trade.tags.length - 3}
-                  </span>
-                )}
+
+            {/* Stats */}
+            <div className="text-right shrink-0 space-y-1">
+              <div className="text-xs text-muted-foreground">
+                RR:{" "}
+                <span className="font-mono text-foreground">
+                  {trade.rrRatio.toFixed(2)}R
+                </span>
               </div>
-            )}
-
-            {/* Screenshot thumbnail */}
-            {screenshotUrl && (
-              <div className="mt-2 pt-2 border-t border-border/50">
-                <img
-                  src={screenshotUrl}
-                  alt="Trade screenshot"
-                  loading="lazy"
-                  className="w-full h-20 object-cover rounded-md opacity-80 hover:opacity-100 transition-opacity"
-                />
+              <div className="text-xs">
+                <span
+                  className={cn(
+                    "font-mono font-bold",
+                    trade.rMultiple >= 0 ? "text-trade-win" : "text-trade-loss",
+                  )}
+                >
+                  {trade.rMultiple >= 0 ? "+" : ""}
+                  {trade.rMultiple.toFixed(2)}R
+                </span>
               </div>
-            )}
-          </div>
-
-          {/* Stats */}
-          <div className="text-right shrink-0 space-y-1">
-            <div className="text-xs text-muted-foreground">
-              RR:{" "}
-              <span className="font-mono text-foreground">
-                {trade.rrRatio.toFixed(2)}R
-              </span>
             </div>
-            <div className="text-xs">
-              <span
-                className={cn(
-                  "font-mono font-bold",
-                  trade.rMultiple >= 0 ? "text-trade-win" : "text-trade-loss",
-                )}
-              >
-                {trade.rMultiple >= 0 ? "+" : ""}
-                {trade.rMultiple.toFixed(2)}R
-              </span>
-            </div>
-          </div>
 
-          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-        </div>
-      </CardContent>
-    </Card>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card-level screenshot lightbox portal */}
+      {cardLightboxOpen && screenshotUrl && (
+        <ScreenshotLightbox
+          url={screenshotUrl}
+          onClose={() => setCardLightboxOpen(false)}
+          ocidPrefix="screenshot.card"
+        />
+      )}
+    </>
   );
 }
 
