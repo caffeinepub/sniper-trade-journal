@@ -331,6 +331,9 @@ export default function TradeFormPage({
   const updateTrade = useUpdateTrade();
   const { identity } = useInternetIdentity();
   const { actor, isFetching: isActorLoading } = useActor();
+  const [waitingForActor, setWaitingForActor] = useState(false);
+  // 'save' = go to journal after, 'add' = reset form and stay
+  const pendingSaveRef = useRef<"save" | "add" | null>(null);
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -385,6 +388,27 @@ export default function TradeFormPage({
       URL.revokeObjectURL(url);
     };
   }, [screenshotFile]);
+
+  // When actor becomes available after waiting, auto-trigger the pending save
+  const actorRef = useRef(actor);
+  useEffect(() => {
+    actorRef.current = actor;
+  }, [actor]);
+
+  useEffect(() => {
+    if (!waitingForActor || !actor || isActorLoading) return;
+    if (!pendingSaveRef.current) return;
+    const savedType = pendingSaveRef.current;
+    pendingSaveRef.current = null;
+    setWaitingForActor(false);
+    // Re-trigger the appropriate save path
+    if (savedType === "save") {
+      _executeSave("save");
+    } else {
+      _executeSave("add");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor, isActorLoading, waitingForActor]);
 
   const set = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -509,22 +533,16 @@ export default function TradeFormPage({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSaveTrade = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Auth guard
-    if (!identity) {
-      toast.error("Please sign in to save trades");
+  // Core save logic — called once actor is confirmed ready
+  const _executeSave = async (mode: "save" | "add") => {
+    const currentActor = actorRef.current;
+    if (!currentActor) {
+      toast.error(
+        "Could not connect to backend. Please refresh and try again.",
+      );
       return;
     }
 
-    // Actor not ready yet — backend connection still initializing
-    if (!actor || isActorLoading) {
-      toast.info("Connecting to backend, please try again in a moment...");
-      return;
-    }
-
-    // Validate
     const validationErrors = validateForm(form);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
@@ -533,19 +551,24 @@ export default function TradeFormPage({
     if (!input) return;
 
     try {
-      if (isEdit && editTradeId) {
-        await updateTrade.mutateAsync({ id: editTradeId, input });
-        toast.success("Trade updated successfully");
+      if (mode === "save") {
+        if (isEdit && editTradeId) {
+          await updateTrade.mutateAsync({ id: editTradeId, input });
+          toast.success("Trade updated successfully");
+        } else {
+          await createTrade.mutateAsync(input);
+          toast.success("Trade saved successfully.");
+        }
+        setUploadProgress(0);
+        onNavigate("journal");
       } else {
         await createTrade.mutateAsync(input);
         toast.success("Trade saved successfully.");
+        resetForm();
       }
-      setUploadProgress(0);
-      onNavigate("journal");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save trade";
-      // Only show sign-in prompt if identity is truly missing, not for connection errors
       if (!identity) {
         toast.error("Please sign in to save trades");
       } else if (
@@ -559,45 +582,45 @@ export default function TradeFormPage({
     }
   };
 
-  const handleSaveAndAddAnother = async () => {
-    // Auth guard
+  const handleSaveTrade = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!identity) {
       toast.error("Please sign in to save trades");
       return;
     }
 
-    // Actor not ready yet — backend connection still initializing
+    // If actor isn't ready yet, queue the save and show a waiting state
     if (!actor || isActorLoading) {
-      toast.info("Connecting to backend, please try again in a moment...");
+      const validationErrors = validateForm(form);
+      setErrors(validationErrors);
+      if (Object.keys(validationErrors).length > 0) return;
+      pendingSaveRef.current = "save";
+      setWaitingForActor(true);
+      toast.info("Connecting to backend, saving shortly...");
       return;
     }
 
-    // Validate
-    const validationErrors = validateForm(form);
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
+    await _executeSave("save");
+  };
 
-    const input = await buildTradeInput();
-    if (!input) return;
-
-    try {
-      await createTrade.mutateAsync(input);
-      toast.success("Trade saved successfully.");
-      resetForm();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to save trade";
-      if (!identity) {
-        toast.error("Please sign in to save trades");
-      } else if (
-        message.includes("Unauthorized") ||
-        message.includes("not registered")
-      ) {
-        toast.error("Session expired. Please sign out and sign in again.");
-      } else {
-        toast.error(message || "Failed to save trade. Please try again.");
-      }
+  const handleSaveAndAddAnother = async () => {
+    if (!identity) {
+      toast.error("Please sign in to save trades");
+      return;
     }
+
+    if (!actor || isActorLoading) {
+      const validationErrors = validateForm(form);
+      setErrors(validationErrors);
+      if (Object.keys(validationErrors).length > 0) return;
+      pendingSaveRef.current = "add";
+      setWaitingForActor(true);
+      toast.info("Connecting to backend, saving shortly...");
+      return;
+    }
+
+    await _executeSave("add");
   };
 
   const isPending = createTrade.isPending || updateTrade.isPending;
@@ -1111,11 +1134,11 @@ export default function TradeFormPage({
             <Button
               data-ocid="trade.form.submit_button"
               type="submit"
-              disabled={isPending || isActorLoading}
+              disabled={isPending || waitingForActor}
               className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold"
               size="lg"
             >
-              {isActorLoading ? (
+              {waitingForActor && pendingSaveRef.current === "save" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Connecting...
@@ -1135,13 +1158,18 @@ export default function TradeFormPage({
               <Button
                 data-ocid="trade.form.save_add_button"
                 type="button"
-                disabled={isPending || isActorLoading}
+                disabled={isPending || waitingForActor}
                 variant="outline"
                 size="lg"
                 className="flex-1 sm:flex-none border-teal/30 text-teal hover:bg-teal-muted font-semibold"
                 onClick={handleSaveAndAddAnother}
               >
-                {isPending ? (
+                {waitingForActor && pendingSaveRef.current === "add" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Saving...
