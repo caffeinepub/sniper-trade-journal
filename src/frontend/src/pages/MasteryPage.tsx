@@ -253,7 +253,7 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
   return (
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-md bg-teal-muted border border-teal/30 flex items-center justify-center shrink-0">
             <Swords className="w-4 h-4 text-teal" />
@@ -265,15 +265,7 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            data-ocid="mastery.dashboard.primary_button"
-            className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-2"
-            onClick={() => onNavigate("mastery-new-drill")}
-          >
-            <Plus className="w-4 h-4" />
-            Start New Drill
-          </Button>
+        <div className="flex gap-2 shrink-0">
           <Button
             data-ocid="mastery.dashboard.secondary_button"
             variant="outline"
@@ -282,6 +274,14 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
           >
             <BookOpen className="w-4 h-4" />
             Drill Journal
+          </Button>
+          <Button
+            data-ocid="mastery.dashboard.primary_button"
+            className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-2"
+            onClick={() => onNavigate("mastery-new-drill")}
+          >
+            <Plus className="w-4 h-4" />
+            Add Drill
           </Button>
         </div>
       </div>

@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 
-export type Theme = "dark" | "blue" | "white";
+export type Theme = "dark" | "white";
 
 interface ThemeContextValue {
   theme: Theme;
@@ -18,19 +18,35 @@ const ThemeContext = createContext<ThemeContextValue>({
   setTheme: () => {},
 });
 
+function applyThemeClass(t: Theme) {
+  const root = document.documentElement;
+  root.classList.remove("theme-dark", "theme-white");
+  root.classList.add(`theme-${t}`);
+  // Keep Tailwind dark: variants in sync
+  if (t === "white") {
+    root.classList.remove("dark");
+  } else {
+    root.classList.add("dark");
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
+    let saved: Theme = "dark";
     try {
-      const saved = localStorage.getItem("sniper-theme") as Theme | null;
-      if (saved === "dark" || saved === "blue" || saved === "white")
-        return saved;
+      const raw = localStorage.getItem("sniper-theme") as Theme | null;
+      if (raw === "dark" || raw === "white") saved = raw;
+      else if (raw === "blue") saved = "dark"; // migrate old blue selection to dark
     } catch {
       // ignore
     }
-    return "dark";
+    // Apply immediately — before first paint — so :root defaults never win
+    applyThemeClass(saved);
+    return saved;
   });
 
   const setTheme = (t: Theme) => {
+    applyThemeClass(t);
     setThemeState(t);
     try {
       localStorage.setItem("sniper-theme", t);
@@ -39,10 +55,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Keep in sync if something external changes the state
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("theme-dark", "theme-blue", "theme-white");
-    root.classList.add(`theme-${theme}`);
+    applyThemeClass(theme);
   }, [theme]);
 
   return (

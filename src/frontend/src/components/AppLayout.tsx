@@ -15,7 +15,6 @@ import {
   Plus,
   Sun,
   Swords,
-  Target,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -81,7 +80,6 @@ interface AppLayoutProps {
 
 const THEME_OPTIONS = [
   { value: "dark" as const, label: "Dark", icon: Moon },
-  { value: "blue" as const, label: "Blue", icon: Sun },
   { value: "white" as const, label: "White", icon: Sun },
 ] as const;
 
@@ -106,10 +104,12 @@ export default function AppLayout({
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-60 bg-sidebar border-r border-sidebar-border shrink-0">
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-          <div className="w-8 h-8 rounded-md bg-teal flex items-center justify-center shrink-0">
-            <Target className="w-4 h-4 text-[oklch(var(--primary-foreground))]" />
-          </div>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border">
+          <img
+            src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+            alt="Sniper Trade Journal logo"
+            className="w-9 h-9 rounded-md object-cover shrink-0"
+          />
           <div>
             <p className="font-semibold text-sm text-sidebar-foreground leading-tight">
               Sniper Trade
@@ -173,10 +173,10 @@ export default function AppLayout({
                       data-ocid={`profile.theme_${opt.value}.button`}
                       onClick={() => setTheme(opt.value)}
                       className={cn(
-                        "flex-1 py-1.5 rounded text-[11px] font-medium capitalize transition-all duration-150",
+                        "flex-1 py-1.5 rounded text-[11px] font-semibold capitalize transition-all duration-150 border",
                         theme === opt.value
-                          ? "bg-teal text-[oklch(var(--primary-foreground))] shadow-sm"
-                          : "bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground",
+                          ? "bg-teal border-teal text-white shadow-sm ring-1 ring-teal/50"
+                          : "bg-transparent border-sidebar-border text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
                       )}
                     >
                       {opt.label}
@@ -213,9 +213,11 @@ export default function AppLayout({
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-sidebar border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-teal flex items-center justify-center">
-            <Target className="w-3.5 h-3.5 text-[oklch(var(--primary-foreground))]" />
-          </div>
+          <img
+            src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+            alt="Sniper Trade Journal logo"
+            className="w-7 h-7 rounded-md object-cover shrink-0"
+          />
           <span className="font-semibold text-sm text-sidebar-foreground">
             Sniper Trade Journal
           </span>
@@ -242,9 +244,11 @@ export default function AppLayout({
           <aside className="relative w-64 bg-sidebar border-r border-sidebar-border flex flex-col animate-slide-in-left">
             <div className="flex items-center justify-between px-5 py-4 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-md bg-teal flex items-center justify-center">
-                  <Target className="w-3.5 h-3.5 text-[oklch(var(--primary-foreground))]" />
-                </div>
+                <img
+                  src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+                  alt="Sniper Trade Journal logo"
+                  className="w-7 h-7 rounded-md object-cover shrink-0"
+                />
                 <span className="font-semibold text-sm">
                   Sniper Trade Journal
                 </span>
@@ -309,10 +313,10 @@ export default function AppLayout({
                           data-ocid={`profile.theme_${opt.value}.button`}
                           onClick={() => setTheme(opt.value)}
                           className={cn(
-                            "flex-1 py-1.5 rounded text-[11px] font-medium capitalize transition-all duration-150",
+                            "flex-1 py-1.5 rounded text-[11px] font-semibold capitalize transition-all duration-150 border",
                             theme === opt.value
-                              ? "bg-teal text-[oklch(var(--primary-foreground))] shadow-sm"
-                              : "bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground",
+                              ? "bg-teal border-teal text-white shadow-sm ring-1 ring-teal/50"
+                              : "bg-transparent border-sidebar-border text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
                           )}
                         >
                           {opt.label}

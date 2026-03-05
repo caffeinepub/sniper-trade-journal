@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetAnalytics, useGetTrades } from "@/hooks/useQueries";
+import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
   computeEquityCurve,
@@ -102,23 +103,39 @@ function KPICard({
   );
 }
 
-const CHART_COLORS = {
-  teal: "oklch(0.78 0.16 195)",
-  win: "oklch(0.72 0.20 155)",
-  loss: "oklch(0.60 0.22 25)",
-  gold: "oklch(0.82 0.15 75)",
-  muted: "oklch(0.30 0.02 240)",
-  text: "oklch(0.55 0.02 230)",
-};
+/** Read a CSS variable from :root as a full oklch() string */
+function cssVar(name: string): string {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return `oklch(${raw})`;
+}
+
+function useChartColors() {
+  // Re-compute whenever theme changes
+  const { theme } = useTheme();
+  return {
+    teal: cssVar("--teal"),
+    win: cssVar("--trade-win"),
+    loss: cssVar("--trade-loss"),
+    gold: cssVar("--gold"),
+    muted: cssVar("--muted"),
+    text: cssVar("--muted-foreground"),
+    // theme is consumed so the hook re-runs on change
+    _theme: theme,
+  };
+}
 
 const CustomTooltip = ({
   active,
   payload,
   label,
+  colors,
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number }>;
   label?: string;
+  colors: ReturnType<typeof useChartColors>;
 }) => {
   if (active && payload && payload.length) {
     return (
@@ -131,12 +148,12 @@ const CustomTooltip = ({
             style={{
               color:
                 entry.name === "cumR"
-                  ? CHART_COLORS.teal
+                  ? colors.teal
                   : entry.name === "count"
                     ? entry.value >= 0
-                      ? CHART_COLORS.win
-                      : CHART_COLORS.loss
-                    : CHART_COLORS.teal,
+                      ? colors.win
+                      : colors.loss
+                    : colors.teal,
             }}
           >
             {entry.name === "cumR"
@@ -153,6 +170,7 @@ const CustomTooltip = ({
 export default function DashboardPage() {
   const { data: tradesData, isLoading: tradesLoading } = useGetTrades();
   const { data: analytics, isLoading: analyticsLoading } = useGetAnalytics();
+  const CHART_COLORS = useChartColors();
 
   const trades: Trade[] = useMemo(() => {
     return tradesData ?? [];
@@ -325,7 +343,7 @@ export default function DashboardPage() {
                   axisLine={false}
                   tickFormatter={(v) => `${v}R`}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip colors={CHART_COLORS} />} />
                 <ReferenceLine
                   y={0}
                   stroke={CHART_COLORS.text}
@@ -382,7 +400,7 @@ export default function DashboardPage() {
                   axisLine={false}
                   allowDecimals={false}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip colors={CHART_COLORS} />} />
                 <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                   {rMultipleDist.map((entry) => (
                     <Cell

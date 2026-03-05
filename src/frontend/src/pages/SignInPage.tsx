@@ -70,14 +70,14 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.78 0.16 195 / 0.08) 0%, transparent 70%)",
+            "radial-gradient(ellipse 80% 60% at 50% -10%, oklch(var(--teal) / 0.08) 0%, transparent 70%)",
         }}
       />
       <div
         className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 80% 100% at 50% 100%, oklch(0.78 0.16 195 / 0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse 80% 100% at 50% 100%, oklch(var(--teal) / 0.06) 0%, transparent 70%)",
         }}
       />
 
@@ -129,9 +129,9 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
                 size="lg"
                 className="w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98]"
                 style={{
-                  background: "oklch(0.78 0.16 195)",
+                  background: "oklch(var(--teal))",
                   color: "#ffffff",
-                  boxShadow: "0 0 24px oklch(0.78 0.16 195 / 0.45)",
+                  boxShadow: "0 0 24px oklch(var(--teal) / 0.45)",
                 }}
                 onClick={login}
                 disabled={isLoggingIn}
@@ -241,9 +241,9 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
             size="lg"
             className="w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98]"
             style={{
-              background: "oklch(0.78 0.16 195)",
+              background: "oklch(var(--teal))",
               color: "#ffffff",
-              boxShadow: "0 0 24px oklch(0.78 0.16 195 / 0.45)",
+              boxShadow: "0 0 24px oklch(var(--teal) / 0.45)",
             }}
             onClick={login}
             disabled={isLoggingIn}
