@@ -20,6 +20,9 @@ export function useGetTrades() {
       return actor.getTrades();
     },
     enabled: !!actor && !isFetching,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 0,
   });
 }
 
@@ -60,6 +63,9 @@ export function useGetAnalytics() {
       return actor.getAnalytics();
     },
     enabled: !!actor && !isFetching,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 0,
   });
 }
 
@@ -137,6 +143,9 @@ export function useGetDrills() {
       return actor.getDrills();
     },
     enabled: !!actor && !isFetching,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 0,
   });
 }
 

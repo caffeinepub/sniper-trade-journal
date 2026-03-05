@@ -1061,57 +1061,6 @@ export default function TradeFormPage({
               )}
             </div>
 
-            {/* Screenshot upload */}
-            <div>
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                Screenshot
-              </Label>
-              <button
-                type="button"
-                data-ocid="trade.form.upload_button"
-                className="w-full border-2 border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-teal/40 hover:bg-teal-muted/20 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {screenshotPreviewUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={screenshotPreviewUrl}
-                      alt="Screenshot preview"
-                      className="w-full max-h-40 object-contain rounded-md mx-auto"
-                    />
-                    <p className="text-xs text-teal/80 truncate">
-                      {screenshotFile?.name}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Click to replace
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="w-5 h-5 text-muted-foreground mx-auto mb-1.5" />
-                    <p className="text-xs text-muted-foreground">
-                      Click to upload trade screenshot
-                    </p>
-                  </>
-                )}
-                {uploadProgress > 0 && uploadProgress < 100 && (
-                  <div className="mt-2 bg-muted rounded-full h-1">
-                    <div
-                      className="bg-teal h-full rounded-full"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                )}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </div>
-
             {/* Main Lesson */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -1125,6 +1074,60 @@ export default function TradeFormPage({
                 rows={4}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Section 5: Screenshot - own section for visibility */}
+        <div>
+          <SectionHeading>Trade Screenshot</SectionHeading>
+          <div>
+            <button
+              type="button"
+              data-ocid="trade.form.upload_button"
+              className="w-full border-2 border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-teal/40 hover:bg-teal-muted/20 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {screenshotPreviewUrl ? (
+                <div className="space-y-2">
+                  <img
+                    src={screenshotPreviewUrl}
+                    alt="Screenshot preview"
+                    className="w-full max-h-40 object-contain rounded-md mx-auto"
+                  />
+                  <p className="text-xs text-teal/80 truncate">
+                    {screenshotFile?.name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Click to replace
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 text-muted-foreground mx-auto mb-1.5" />
+                  <p className="text-xs text-muted-foreground">
+                    Click to upload trade screenshot
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    PNG, JPG, WebP supported
+                  </p>
+                </>
+              )}
+              {uploadProgress > 0 && uploadProgress < 100 && (
+                <div className="mt-2 bg-muted rounded-full h-1">
+                  <div
+                    className="bg-teal h-full rounded-full"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
           </div>
         </div>
 

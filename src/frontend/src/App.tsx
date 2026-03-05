@@ -1,6 +1,7 @@
 import AppLayout, { type AppPage } from "@/components/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
+import { ThemeProvider } from "@/hooks/useTheme";
 import CalendarPage from "@/pages/CalendarPage";
 import DashboardPage from "@/pages/DashboardPage";
 import DrillJournalPage from "@/pages/DrillJournalPage";
@@ -51,7 +52,7 @@ export default function App() {
   // Sign-in gate — show sign-in page if not authenticated
   if (!isAuthenticated) {
     return (
-      <>
+      <ThemeProvider>
         <SignInPage login={login} isLoggingIn={isLoggingIn} />
         <Toaster
           theme="dark"
@@ -62,51 +63,60 @@ export default function App() {
             },
           }}
         />
-      </>
+      </ThemeProvider>
     );
   }
 
   // Authenticated app
   return (
-    <AppLayout currentPage={currentPage} onNavigate={handleNavigate}>
-      {currentPage === "dashboard" && <DashboardPage />}
-      {currentPage === "journal" && <JournalPage onNavigate={handleNavigate} />}
-      {currentPage === "new-trade" && (
-        <TradeFormPage editTradeId={editTradeId} onNavigate={handleNavigate} />
-      )}
-      {currentPage === "calendar" && <CalendarPage />}
-      {currentPage === "review" && <ReviewPage />}
-      {currentPage === "mastery" && <MasteryPage onNavigate={handleNavigate} />}
-      {currentPage === "mastery-new-drill" && (
-        <NewDrillPage editDrillId={editDrillId} onNavigate={handleNavigate} />
-      )}
-      {currentPage === "mastery-journal" && (
-        <DrillJournalPage onNavigate={handleNavigate} />
-      )}
+    <ThemeProvider>
+      <AppLayout currentPage={currentPage} onNavigate={handleNavigate}>
+        {currentPage === "dashboard" && <DashboardPage />}
+        {currentPage === "journal" && (
+          <JournalPage onNavigate={handleNavigate} />
+        )}
+        {currentPage === "new-trade" && (
+          <TradeFormPage
+            editTradeId={editTradeId}
+            onNavigate={handleNavigate}
+          />
+        )}
+        {currentPage === "calendar" && <CalendarPage />}
+        {currentPage === "review" && <ReviewPage />}
+        {currentPage === "mastery" && (
+          <MasteryPage onNavigate={handleNavigate} />
+        )}
+        {currentPage === "mastery-new-drill" && (
+          <NewDrillPage editDrillId={editDrillId} onNavigate={handleNavigate} />
+        )}
+        {currentPage === "mastery-journal" && (
+          <DrillJournalPage onNavigate={handleNavigate} />
+        )}
 
-      <Toaster
-        theme="dark"
-        position="bottom-right"
-        toastOptions={{
-          classNames: {
-            toast: "bg-card border-border text-foreground",
-          },
-        }}
-      />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            classNames: {
+              toast: "bg-card border-border text-foreground",
+            },
+          }}
+        />
 
-      {/* Footer */}
-      <footer className="border-t border-border px-6 py-4 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()}. Built with{" "}
-        <span className="text-trade-loss">♥</span> using{" "}
-        <a
-          href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-teal hover:underline"
-        >
-          caffeine.ai
-        </a>
-      </footer>
-    </AppLayout>
+        {/* Footer */}
+        <footer className="border-t border-border px-6 py-4 text-center text-xs text-muted-foreground">
+          © {new Date().getFullYear()}. Built with{" "}
+          <span className="text-trade-loss">♥</span> using{" "}
+          <a
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-teal hover:underline"
+          >
+            caffeine.ai
+          </a>
+        </footer>
+      </AppLayout>
+    </ThemeProvider>
   );
 }

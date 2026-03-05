@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
+import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
   BookOpen,
@@ -10,7 +11,9 @@ import {
   LogIn,
   LogOut,
   Menu,
+  Moon,
   Plus,
+  Sun,
   Swords,
   Target,
   X,
@@ -76,6 +79,12 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+const THEME_OPTIONS = [
+  { value: "dark" as const, label: "Dark", icon: Moon },
+  { value: "blue" as const, label: "Blue", icon: Sun },
+  { value: "white" as const, label: "White", icon: Sun },
+] as const;
+
 export default function AppLayout({
   currentPage,
   onNavigate,
@@ -85,6 +94,7 @@ export default function AppLayout({
   const { identity, login, clear, isLoggingIn, isInitializing } =
     useInternetIdentity();
   const isAuthenticated = !!identity;
+  const { theme, setTheme } = useTheme();
 
   const handleNav = (page: AppPage) => {
     onNavigate(page);
@@ -141,18 +151,46 @@ export default function AppLayout({
         {/* Auth */}
         <div className="px-3 pb-5 border-t border-sidebar-border pt-4">
           {isAuthenticated ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="px-3 py-2 rounded-md bg-sidebar-accent">
-                <p className="text-[11px] text-muted-foreground">Logged in</p>
+                <p className="text-[11px] text-muted-foreground">Signed in</p>
                 <p className="text-xs font-mono text-teal truncate">
                   {identity?.getPrincipal().toString().slice(0, 20)}...
                 </p>
               </div>
+
+              {/* Theme selector */}
+              <div className="px-1">
+                <p className="text-[11px] text-muted-foreground px-2 mb-1.5 flex items-center gap-1">
+                  <Moon className="w-3 h-3" />
+                  Theme
+                </p>
+                <div className="flex gap-1" data-ocid="profile.theme.panel">
+                  {THEME_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      data-ocid={`profile.theme_${opt.value}.button`}
+                      onClick={() => setTheme(opt.value)}
+                      className={cn(
+                        "flex-1 py-1.5 rounded text-[11px] font-medium capitalize transition-all duration-150",
+                        theme === opt.value
+                          ? "bg-teal text-[oklch(var(--primary-foreground))] shadow-sm"
+                          : "bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground",
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full text-xs border-sidebar-border"
                 onClick={clear}
+                data-ocid="profile.signout.button"
               >
                 <LogOut className="w-3 h-3 mr-2" />
                 Sign Out
@@ -247,15 +285,53 @@ export default function AppLayout({
             </nav>
             <div className="px-3 pb-5 border-t border-sidebar-border pt-4">
               {isAuthenticated ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={clear}
-                >
-                  <LogOut className="w-3 h-3 mr-2" />
-                  Sign Out
-                </Button>
+                <div className="space-y-3">
+                  <div className="px-3 py-2 rounded-md bg-sidebar-accent">
+                    <p className="text-[11px] text-muted-foreground">
+                      Signed in
+                    </p>
+                    <p className="text-xs font-mono text-teal truncate">
+                      {identity?.getPrincipal().toString().slice(0, 20)}...
+                    </p>
+                  </div>
+
+                  {/* Theme selector (mobile) */}
+                  <div className="px-1">
+                    <p className="text-[11px] text-muted-foreground px-2 mb-1.5 flex items-center gap-1">
+                      <Moon className="w-3 h-3" />
+                      Theme
+                    </p>
+                    <div className="flex gap-1" data-ocid="profile.theme.panel">
+                      {THEME_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          data-ocid={`profile.theme_${opt.value}.button`}
+                          onClick={() => setTheme(opt.value)}
+                          className={cn(
+                            "flex-1 py-1.5 rounded text-[11px] font-medium capitalize transition-all duration-150",
+                            theme === opt.value
+                              ? "bg-teal text-[oklch(var(--primary-foreground))] shadow-sm"
+                              : "bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs border-sidebar-border"
+                    onClick={clear}
+                    data-ocid="profile.signout.button"
+                  >
+                    <LogOut className="w-3 h-3 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
               ) : (
                 <Button
                   size="sm"

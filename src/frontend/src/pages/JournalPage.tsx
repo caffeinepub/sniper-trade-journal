@@ -44,6 +44,7 @@ import {
   Edit3,
   Filter,
   Minus,
+  Plus,
   Search,
   Tag,
   Trash2,
@@ -623,23 +624,34 @@ export default function JournalPage({ onNavigate }: JournalPageProps) {
   return (
     <div className="p-4 md:p-6 space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">Trade Journal</h1>
           <p className="text-sm text-muted-foreground">
             {filteredTrades.length} of {trades.length} trades
           </p>
         </div>
-        <Button
-          data-ocid="journal.export.button"
-          size="sm"
-          variant="outline"
-          className="border-teal/30 text-teal hover:bg-teal-muted text-xs"
-          onClick={handleExport}
-        >
-          <Download className="w-3.5 h-3.5 mr-1.5" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            data-ocid="journal.new_trade.primary_button"
+            size="sm"
+            className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-1.5"
+            onClick={() => onNavigate("new-trade")}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Trade
+          </Button>
+          <Button
+            data-ocid="journal.export.button"
+            size="sm"
+            variant="outline"
+            className="border-teal/30 text-teal hover:bg-teal-muted text-xs"
+            onClick={handleExport}
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Filter bar */}
