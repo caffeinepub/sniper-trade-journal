@@ -40,7 +40,7 @@ import {
   X,
   ZoomIn,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Bar,
@@ -59,6 +59,23 @@ import type {
   Trade,
   UserStats,
 } from "../backend.d";
+
+// ─── Resolve CSS variable to computed color for SVG attributes ───────────────
+
+function resolveColor(varName: string): string {
+  const root = document.documentElement;
+  const raw = getComputedStyle(root).getPropertyValue(varName).trim();
+  if (!raw) return "#888";
+  const tmp = document.createElement("div");
+  tmp.style.color = `oklch(${raw})`;
+  tmp.style.position = "absolute";
+  tmp.style.opacity = "0";
+  tmp.style.pointerEvents = "none";
+  root.appendChild(tmp);
+  const resolved = getComputedStyle(tmp).color;
+  root.removeChild(tmp);
+  return resolved || `oklch(${raw})`;
+}
 
 // ─── Screenshot lightbox ────────────────────────────────────────────────────
 
@@ -236,6 +253,7 @@ function AdminTradeDetailModal({
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent
           data-ocid="admin.trade.detail.modal"
+          showCloseButton={false}
           className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto"
         >
           <DialogHeader>
@@ -1142,24 +1160,25 @@ function OverviewView({
     })
     .slice(0, 5);
 
+  // Resolved chart colors (SVG attributes don't evaluate oklch() in all browsers)
+  const chartColors = useMemo(
+    () => ({
+      teal: resolveColor("--teal"),
+      chart2: resolveColor("--chart-2"),
+      muted: resolveColor("--muted-foreground"),
+      border: resolveColor("--border"),
+    }),
+    [],
+  );
+
   // Top 5 by trade count for chart
   const top5ByTrades = [...allUsers]
     .sort((a, b) => Number(b.totalTrades) - Number(a.totalTrades))
     .slice(0, 5)
-    .map((u, i) => ({
+    .map((u) => ({
       name: truncatePrincipal(u.owner),
       trades: Number(u.totalTrades),
-      fill:
-        i === 0
-          ? "var(--teal)"
-          : i === 1
-            ? "var(--chart-2)"
-            : "var(--muted-foreground)",
     }));
-
-  const chartColor = getComputedStyle(document.documentElement)
-    .getPropertyValue("--teal")
-    .trim();
 
   return (
     <div className="p-4 md:p-6 space-y-5 animate-fade-in">
@@ -1179,7 +1198,7 @@ function OverviewView({
         <Button
           data-ocid="admin.overview.leaderboard.button"
           size="sm"
-          className="bg-teal hover:bg-teal/90 text-white gap-2"
+          className="bg-teal hover:bg-teal/90 text-white btn-teal-text gap-2"
           onClick={onGoToLeaderboard}
         >
           <Trophy className="w-3.5 h-3.5" />
@@ -1274,7 +1293,8 @@ function OverviewView({
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    stroke={`oklch(${chartColor} / 0.1)`}
+                    stroke={chartColors.border}
+                    strokeOpacity={0.4}
                     vertical={false}
                   />
                   <XAxis
@@ -1290,13 +1310,13 @@ function OverviewView({
                   />
                   <RechartsTooltip
                     contentStyle={{
-                      background: "oklch(var(--card))",
+                      backgroundColor: "oklch(var(--card))",
                       border: "1px solid oklch(var(--border))",
                       borderRadius: "6px",
                       fontSize: "11px",
                     }}
                     labelStyle={{ color: "oklch(var(--foreground))" }}
-                    itemStyle={{ color: "oklch(var(--teal))" }}
+                    itemStyle={{ color: chartColors.teal }}
                   />
                   <Bar dataKey="trades" radius={[3, 3, 0, 0]}>
                     {top5ByTrades.map((_entry, i) => (
@@ -1304,10 +1324,10 @@ function OverviewView({
                         key={top5ByTrades[i].name}
                         fill={
                           i === 0
-                            ? "oklch(var(--teal))"
+                            ? chartColors.teal
                             : i === 1
-                              ? "oklch(var(--chart-2))"
-                              : "oklch(var(--muted-foreground) / 0.4)"
+                              ? chartColors.chart2
+                              : chartColors.muted
                         }
                       />
                     ))}

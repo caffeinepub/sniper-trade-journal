@@ -279,7 +279,7 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
           <Button
             data-ocid="mastery.dashboard.primary_button"
             size="sm"
-            className="bg-teal hover:bg-teal/90 text-white font-semibold gap-2 flex-1 sm:flex-none"
+            className="bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold gap-2 flex-1 sm:flex-none"
             onClick={() => onNavigate("mastery-new-drill")}
           >
             <Plus className="w-4 h-4" />

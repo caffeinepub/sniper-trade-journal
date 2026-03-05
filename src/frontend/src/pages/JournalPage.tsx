@@ -186,6 +186,7 @@ function TradeDetailModal({
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent
           data-ocid="trade.detail.modal"
+          showCloseButton={false}
           className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto"
         >
           <DialogHeader>
@@ -635,7 +636,7 @@ export default function JournalPage({ onNavigate }: JournalPageProps) {
           <Button
             data-ocid="journal.new_trade.primary_button"
             size="sm"
-            className="bg-teal hover:bg-teal/90 text-white font-semibold gap-1.5"
+            className="bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold gap-1.5"
             onClick={() => onNavigate("new-trade")}
           >
             <Plus className="w-3.5 h-3.5" />

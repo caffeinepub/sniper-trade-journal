@@ -1154,7 +1154,7 @@ export default function TradeFormPage({
               data-ocid="trade.form.submit_button"
               type="submit"
               disabled={isPending || waitingForActor}
-              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-white font-semibold"
+              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold"
               size="lg"
             >
               {waitingForActor && pendingSaveRef.current === "save" ? (

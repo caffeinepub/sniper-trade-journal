@@ -103,25 +103,38 @@ function KPICard({
   );
 }
 
-/** Read a CSS variable from :root as a full oklch() string */
-function cssVar(name: string): string {
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  return `oklch(${raw})`;
+/**
+ * Resolve a CSS custom property to a computed hex/rgb color string that SVG
+ * stroke/fill attributes can consume reliably (SVG does not evaluate
+ * oklch() in presentation attributes on all browsers).
+ */
+function resolveColor(varName: string): string {
+  const root = document.documentElement;
+  const raw = getComputedStyle(root).getPropertyValue(varName).trim();
+  if (!raw) return "#888";
+  // Create a temporary element to let the browser resolve oklch → computed rgb
+  const tmp = document.createElement("div");
+  tmp.style.color = `oklch(${raw})`;
+  tmp.style.position = "absolute";
+  tmp.style.opacity = "0";
+  tmp.style.pointerEvents = "none";
+  root.appendChild(tmp);
+  const resolved = getComputedStyle(tmp).color;
+  root.removeChild(tmp);
+  // Fall back gracefully if browser doesn't resolve
+  return resolved || `oklch(${raw})`;
 }
 
 function useChartColors() {
-  // Re-compute whenever theme changes
   const { theme } = useTheme();
+  // Re-resolve on every theme change
   return {
-    teal: cssVar("--teal"),
-    win: cssVar("--trade-win"),
-    loss: cssVar("--trade-loss"),
-    gold: cssVar("--gold"),
-    muted: cssVar("--muted"),
-    text: cssVar("--muted-foreground"),
-    // theme is consumed so the hook re-runs on change
+    teal: resolveColor("--teal"),
+    win: resolveColor("--trade-win"),
+    loss: resolveColor("--trade-loss"),
+    gold: resolveColor("--gold"),
+    muted: resolveColor("--muted"),
+    text: resolveColor("--muted-foreground"),
     _theme: theme,
   };
 }

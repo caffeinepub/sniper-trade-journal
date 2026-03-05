@@ -95,6 +95,16 @@ export default function App() {
     );
   }
 
+  const refreshAdminStatus = async () => {
+    if (!actor) return;
+    try {
+      const result = await actor.isCallerAdmin();
+      setIsAdmin(result);
+    } catch {
+      // ignore
+    }
+  };
+
   // Authenticated app
   return (
     <ThemeProvider>
@@ -102,6 +112,8 @@ export default function App() {
         currentPage={currentPage}
         onNavigate={handleNavigate}
         isAdmin={isAdmin}
+        actor={actor}
+        onAdminGranted={refreshAdminStatus}
       >
         {currentPage === "dashboard" && <DashboardPage />}
         {currentPage === "journal" && (

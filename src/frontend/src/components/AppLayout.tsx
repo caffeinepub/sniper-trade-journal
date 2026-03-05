@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import {
   Calendar,
   ChevronRight,
   LayoutDashboard,
+  Loader2,
   LogIn,
   LogOut,
   Menu,
@@ -18,7 +20,9 @@ import {
   Swords,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { backendInterface } from "../backend.d";
 
 export type AppPage =
   | "dashboard"
@@ -79,6 +83,8 @@ interface AppLayoutProps {
   onNavigate: (page: AppPage, id?: string) => void;
   children: React.ReactNode;
   isAdmin?: boolean;
+  actor?: backendInterface | null;
+  onAdminGranted?: () => Promise<void>;
 }
 
 const THEME_OPTIONS = [
@@ -86,11 +92,166 @@ const THEME_OPTIONS = [
   { value: "white" as const, label: "White", icon: Sun },
 ] as const;
 
+/**
+ * Hidden admin setup modal — only opens when URL hash is #admin-setup.
+ * Never shown in the regular UI; invisible to normal users.
+ */
+function HiddenAdminSetupModal({
+  actor,
+  onAdminGranted,
+}: {
+  actor: backendInterface | null | undefined;
+  onAdminGranted?: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Watch for #admin-setup in the URL hash
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === "#admin-setup") {
+        setOpen(true);
+        setStatus("idle");
+        setToken("");
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
+
+  const handleClose = () => {
+    setOpen(false);
+    // Remove the hash without causing a page scroll
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search,
+    );
+  };
+
+  const handleClaim = async () => {
+    if (!actor || !token.trim()) return;
+    setLoading(true);
+    setStatus("idle");
+    try {
+      await (
+        actor as unknown as {
+          _initializeAccessControlWithSecret: (t: string) => Promise<void>;
+        }
+      )._initializeAccessControlWithSecret(token.trim());
+      const isNowAdmin = await actor.isCallerAdmin();
+      if (isNowAdmin) {
+        setStatus("success");
+        setToken("");
+        if (onAdminGranted) await onAdminGranted();
+        // Auto-close after short delay
+        setTimeout(handleClose, 1500);
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-semibold text-foreground">
+              Admin Setup
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {status === "success" ? (
+          <div className="py-4 text-center space-y-2">
+            <Shield className="w-8 h-8 text-teal mx-auto" />
+            <p className="text-sm font-semibold text-teal">
+              Admin access granted!
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The Admin Panel is now visible in your sidebar.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Enter your admin token to activate the Admin Panel for this
+              account.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                ref={inputRef}
+                type="password"
+                placeholder="Admin token…"
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value);
+                  setStatus("idle");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleClaim();
+                }}
+                className="flex-1 text-sm bg-background border-border"
+                data-ocid="admin.claim.input"
+              />
+              <Button
+                type="button"
+                disabled={loading || !token.trim()}
+                onClick={handleClaim}
+                className="bg-teal hover:bg-teal/90 text-white btn-teal-text px-4"
+                data-ocid="admin.claim.button"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Activate"
+                )}
+              </Button>
+            </div>
+            {status === "error" && (
+              <p
+                className="text-xs text-red-400"
+                data-ocid="admin.claim.error_state"
+              >
+                Invalid token. Please try again.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function AppLayout({
   currentPage,
   onNavigate,
   children,
   isAdmin = false,
+  actor,
+  onAdminGranted,
 }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { identity, login, clear, isLoggingIn, isInitializing } =
@@ -103,6 +264,56 @@ export default function AppLayout({
     setMobileOpen(false);
   };
 
+  /** Shared auth panel content (reused in both desktop sidebar and mobile drawer) */
+  const AuthPanel = ({ isMobile = false }: { isMobile?: boolean }) => (
+    <div className={cn("space-y-3", isMobile ? "" : "")}>
+      <div className="px-3 py-2 rounded-md bg-sidebar-accent">
+        <p className="text-[11px] text-muted-foreground">Signed in</p>
+        <p className="text-xs font-mono text-teal truncate">
+          {identity?.getPrincipal().toString().slice(0, 20)}...
+        </p>
+      </div>
+
+      {/* Theme selector */}
+      <div className="px-1">
+        <p className="text-[11px] text-muted-foreground px-2 mb-1.5 flex items-center gap-1">
+          <Moon className="w-3 h-3" />
+          Theme
+        </p>
+        <div className="flex gap-1" data-ocid="profile.theme.panel">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              data-ocid={`profile.theme_${opt.value}.button`}
+              onClick={() => setTheme(opt.value)}
+              className={cn(
+                "flex-1 py-1.5 rounded text-[11px] font-semibold capitalize transition-all duration-150 border",
+                theme === opt.value
+                  ? "bg-teal border-teal shadow-sm ring-1 ring-teal/50"
+                  : "bg-transparent border-sidebar-border text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+              )}
+              style={theme === opt.value ? { color: "#fff" } : undefined}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full text-xs border-sidebar-border"
+        onClick={clear}
+        data-ocid="profile.signout.button"
+      >
+        <LogOut className="w-3 h-3 mr-2" />
+        Sign Out
+      </Button>
+    </div>
+  );
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
@@ -110,7 +321,7 @@ export default function AppLayout({
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border">
           <img
-            src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+            src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
             alt="Sniper Trade Journal logo"
             className="w-9 h-9 rounded-md object-cover shrink-0"
           />
@@ -123,7 +334,7 @@ export default function AppLayout({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = item.activeFor
@@ -174,55 +385,11 @@ export default function AppLayout({
         {/* Auth */}
         <div className="px-3 pb-5 border-t border-sidebar-border pt-4">
           {isAuthenticated ? (
-            <div className="space-y-3">
-              <div className="px-3 py-2 rounded-md bg-sidebar-accent">
-                <p className="text-[11px] text-muted-foreground">Signed in</p>
-                <p className="text-xs font-mono text-teal truncate">
-                  {identity?.getPrincipal().toString().slice(0, 20)}...
-                </p>
-              </div>
-
-              {/* Theme selector */}
-              <div className="px-1">
-                <p className="text-[11px] text-muted-foreground px-2 mb-1.5 flex items-center gap-1">
-                  <Moon className="w-3 h-3" />
-                  Theme
-                </p>
-                <div className="flex gap-1" data-ocid="profile.theme.panel">
-                  {THEME_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      data-ocid={`profile.theme_${opt.value}.button`}
-                      onClick={() => setTheme(opt.value)}
-                      className={cn(
-                        "flex-1 py-1.5 rounded text-[11px] font-semibold capitalize transition-all duration-150 border",
-                        theme === opt.value
-                          ? "bg-teal border-teal text-white shadow-sm ring-1 ring-teal/50"
-                          : "bg-transparent border-sidebar-border text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs border-sidebar-border"
-                onClick={clear}
-                data-ocid="profile.signout.button"
-              >
-                <LogOut className="w-3 h-3 mr-2" />
-                Sign Out
-              </Button>
-            </div>
+            <AuthPanel />
           ) : (
             <Button
               size="sm"
-              className="w-full bg-teal hover:bg-teal/90 text-white text-xs"
+              className="w-full bg-teal hover:bg-teal/90 text-white btn-teal-text text-xs"
               onClick={login}
               disabled={isLoggingIn || isInitializing}
             >
@@ -237,7 +404,7 @@ export default function AppLayout({
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-sidebar border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <img
-            src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+            src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
             alt="Sniper Trade Journal logo"
             className="w-7 h-7 rounded-md object-cover shrink-0"
           />
@@ -268,7 +435,7 @@ export default function AppLayout({
             <div className="flex items-center justify-between px-5 py-4 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
                 <img
-                  src="/assets/uploads/ChatGPT-Image-Mar-5-2026-07_37_22-PM-1.png"
+                  src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
                   alt="Sniper Trade Journal logo"
                   className="w-7 h-7 rounded-md object-cover shrink-0"
                 />
@@ -285,7 +452,7 @@ export default function AppLayout({
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-1">
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = item.activeFor
@@ -328,57 +495,11 @@ export default function AppLayout({
             </nav>
             <div className="px-3 pb-5 border-t border-sidebar-border pt-4">
               {isAuthenticated ? (
-                <div className="space-y-3">
-                  <div className="px-3 py-2 rounded-md bg-sidebar-accent">
-                    <p className="text-[11px] text-muted-foreground">
-                      Signed in
-                    </p>
-                    <p className="text-xs font-mono text-teal truncate">
-                      {identity?.getPrincipal().toString().slice(0, 20)}...
-                    </p>
-                  </div>
-
-                  {/* Theme selector (mobile) */}
-                  <div className="px-1">
-                    <p className="text-[11px] text-muted-foreground px-2 mb-1.5 flex items-center gap-1">
-                      <Moon className="w-3 h-3" />
-                      Theme
-                    </p>
-                    <div className="flex gap-1" data-ocid="profile.theme.panel">
-                      {THEME_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          data-ocid={`profile.theme_${opt.value}.button`}
-                          onClick={() => setTheme(opt.value)}
-                          className={cn(
-                            "flex-1 py-1.5 rounded text-[11px] font-semibold capitalize transition-all duration-150 border",
-                            theme === opt.value
-                              ? "bg-teal border-teal text-white shadow-sm ring-1 ring-teal/50"
-                              : "bg-transparent border-sidebar-border text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs border-sidebar-border"
-                    onClick={clear}
-                    data-ocid="profile.signout.button"
-                  >
-                    <LogOut className="w-3 h-3 mr-2" />
-                    Sign Out
-                  </Button>
-                </div>
+                <AuthPanel isMobile />
               ) : (
                 <Button
                   size="sm"
-                  className="w-full bg-teal hover:bg-teal/90 text-white text-xs"
+                  className="w-full bg-teal hover:bg-teal/90 text-white btn-teal-text text-xs"
                   onClick={login}
                   disabled={isLoggingIn}
                 >
@@ -393,6 +514,9 @@ export default function AppLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto lg:pt-0 pt-14">{children}</main>
+
+      {/* Hidden admin setup — only triggers via #admin-setup URL hash */}
+      <HiddenAdminSetupModal actor={actor} onAdminGranted={onAdminGranted} />
     </div>
   );
 }

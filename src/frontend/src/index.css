@@ -262,6 +262,13 @@
     border-color: oklch(var(--teal));
   }
 
+  /* Force white text on teal-background buttons across all themes.
+     Utility is needed because shadcn Button's base styles can override
+     text-white in white/light theme via higher-specificity selectors. */
+  .btn-teal-text {
+    color: #ffffff !important;
+  }
+
   /* Gold */
   .text-gold {
     color: oklch(var(--gold));
