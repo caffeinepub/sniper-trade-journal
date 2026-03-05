@@ -1,60 +1,29 @@
 # Sniper Trade Journal
 
 ## Current State
-
-- Full-stack trading journal app with Motoko backend + React frontend
-- Authentication via Internet Identity (ICP)
-- Authorization component already integrated (`authorization/access-control`, `MixinAuthorization`)
-- Backend already has `isCallerAdmin()` and `assignCallerUserRole()` methods
-- Data: `trades` and `drills` maps stored in stable memory, keyed by generated UUID
-- `getUserProfile()` already allows admin to read any user's profile
-- `getTradeById()` already allows admin to read individual trades
-- No admin-specific aggregate query endpoints exist yet
-- Frontend pages: Dashboard, Journal, New Trade, Calendar, Brutal Review, Mastery, Drill Journal, New Drill, Sign In
-- `AppPage` type and `NAV_ITEMS` are defined in `AppLayout.tsx`
-- Nav is visible to all authenticated users with no role-based filtering
+Full trading journal app with Dashboard, Journal, New Trade, Calendar, Brutal Review, Mastery, and Admin Panel sections. Admin access currently requires entering a secret token via a hidden `#admin-setup` URL hash modal. The backend `_initializeAccessControlWithSecret` function requires a CAFFEINE_ADMIN_TOKEN environment variable to be matched.
 
 ## Requested Changes (Diff)
 
 ### Add
-
-**Backend:**
-- `adminGetAllUsers()` — returns list of all principals who have trades, with aggregate stats per user (totalTrades, wins, losses, winRate, avgRR, avgRMultiple, totalNetR, mostRecentTradeDate)
-- `adminGetUserTrades(user: Principal)` — returns all trades for a specific user, admin-only
-- `adminGetUserStats(user: Principal)` — returns analytics object for a specific user, admin-only
-- `adminGetPlatformStats()` — returns platform-wide overview: totalUsers, totalTrades, avgWinRate, mostActiveUser
-
-**Frontend pages:**
-- `AdminPage.tsx` — admin panel root with sub-view state (overview | leaderboard | user-detail)
-  - Overview tab: stat cards (total users, total trades, avg win rate, most active trader) + recent activity list
-  - Leaderboard tab: sortable table with Rank, Username (truncated Principal), Total Trades, Win Rate, Avg R-Multiple, Net R, Most Recent Trade — sorted by Net R desc by default
-  - User detail view: profile header (principal, join date, total trades, avg RR, win rate, net R) + read-only trade table with screenshot thumbnails + trade detail modal
-
-**Frontend routing:**
-- Add `"admin"` to `AppPage` type
-- Admin nav item visible only when `isAdmin === true` (use `isCallerAdmin()` result stored in context)
-- Route guard in App.tsx: if `currentPage === "admin"` and user is not admin, redirect to `"dashboard"`
+- New backend function `_initializeAccessControl` (no token/secret required) — first caller becomes admin permanently, all subsequent callers become regular users
+- Auto-call `_initializeAccessControl` on sign-in (in frontend, immediately after actor is ready)
 
 ### Modify
-
-- `AppLayout.tsx` — conditionally show "Admin" nav item with Shield icon only when `isAdmin` prop is true; pass `isAdmin` from App.tsx
-- `App.tsx` — fetch `isCallerAdmin()` after auth, store as state; pass to AppLayout and guard admin route
-- `AppPage` type — add `"admin"` variant
+- `access-control.mo`: Remove token comparison from `initialize()`. First non-anonymous caller who has not yet registered becomes admin. After admin is assigned, all future callers become regular users. Admin is locked forever — no reassignment possible.
+- `MixinAuthorization.mo`: Replace `_initializeAccessControlWithSecret(userSecret)` with `_initializeAccessControl()` (no argument, no env var lookup). Expose it as a public shared function.
+- `AppLayout.tsx`: Remove `HiddenAdminSetupModal` component entirely. Remove `#admin-setup` hash logic. Remove `onAdminGranted` prop and related admin token UI. Admin panel nav link remains but is only shown when `isAdmin === true`.
+- `App.tsx`: On actor ready + authenticated, auto-call `actor._initializeAccessControl()` instead of waiting for manual token entry. Check `isCallerAdmin()` right after to set `isAdmin` state.
 
 ### Remove
-
-- Nothing removed
+- `HiddenAdminSetupModal` component and all its associated state
+- Admin token input, "Activate" button, and error/success states for token flow
+- `_initializeAccessControlWithSecret` backend function
+- Any reference to `CAFFEINE_ADMIN_TOKEN` environment variable in authorization logic
 
 ## Implementation Plan
-
-1. Add `adminGetAllUsers`, `adminGetUserTrades`, `adminGetUserStats`, `adminGetPlatformStats` to `main.mo` — all guarded with `AccessControl.isAdmin` check
-2. Regenerate `backend.d.ts` via `generate_motoko_code`
-3. In `App.tsx`: fetch `isCallerAdmin()` on mount after auth, store in `isAdmin` state; pass to AppLayout; add admin route guard
-4. In `AppLayout.tsx`: add `isAdmin` prop; add Shield nav item to NAV_ITEMS conditionally; update AppPage type
-5. Create `AdminPage.tsx` with:
-   - Sub-view state: `overview | leaderboard | user-detail`
-   - Overview: platform stat cards + recent activity feed
-   - Leaderboard: sortable table with performance ranking
-   - User detail: read-only profile + trade list with screenshot thumbnails + full trade detail modal
-6. Wire admin page into App.tsx render tree
-7. All admin calls are read-only — no edit/delete actions exposed in admin UI
+1. Regenerate backend: `_initializeAccessControl()` public shared — no args, no token. First caller becomes admin, locked forever.
+2. Update `MixinAuthorization.mo` accordingly (via code generator).
+3. Update `App.tsx`: after actor is ready, call `_initializeAccessControl()` then `isCallerAdmin()` to set admin state.
+4. Update `AppLayout.tsx`: remove `HiddenAdminSetupModal`, remove `onAdminGranted` prop, remove token UI. Admin nav link only shown when `isAdmin === true`.
+5. Validate and deploy.

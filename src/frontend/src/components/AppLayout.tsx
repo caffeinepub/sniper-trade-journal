@@ -20,8 +20,7 @@ import {
   Swords,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import type { backendInterface } from "../backend.d";
 
 export type AppPage =
@@ -93,46 +92,21 @@ const THEME_OPTIONS = [
 ] as const;
 
 /**
- * Hidden admin setup modal — only opens when URL hash is #admin-setup.
- * Never shown in the regular UI; invisible to normal users.
+ * Inline "Claim Admin" section shown inside the sidebar auth panel.
+ * Visible only to authenticated non-admin users.
+ * The first person who uses the correct admin token becomes admin permanently.
  */
-function HiddenAdminSetupModal({
+function ClaimAdminSection({
   actor,
   onAdminGranted,
 }: {
   actor: backendInterface | null | undefined;
   onAdminGranted?: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Watch for #admin-setup in the URL hash
-  useEffect(() => {
-    const check = () => {
-      if (window.location.hash === "#admin-setup") {
-        setOpen(true);
-        setStatus("idle");
-        setToken("");
-        setTimeout(() => inputRef.current?.focus(), 100);
-      }
-    };
-    check();
-    window.addEventListener("hashchange", check);
-    return () => window.removeEventListener("hashchange", check);
-  }, []);
-
-  const handleClose = () => {
-    setOpen(false);
-    // Remove the hash without causing a page scroll
-    history.replaceState(
-      null,
-      "",
-      window.location.pathname + window.location.search,
-    );
-  };
 
   const handleClaim = async () => {
     if (!actor || !token.trim()) return;
@@ -149,8 +123,6 @@ function HiddenAdminSetupModal({
         setStatus("success");
         setToken("");
         if (onAdminGranted) await onAdminGranted();
-        // Auto-close after short delay
-        setTimeout(handleClose, 1500);
       } else {
         setStatus("error");
       }
@@ -161,87 +133,80 @@ function HiddenAdminSetupModal({
     }
   };
 
-  if (!open) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-foreground">
-              Admin Setup
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {status === "success" ? (
-          <div className="py-4 text-center space-y-2">
-            <Shield className="w-8 h-8 text-teal mx-auto" />
-            <p className="text-sm font-semibold text-teal">
-              Admin access granted!
-            </p>
-            <p className="text-xs text-muted-foreground">
-              The Admin Panel is now visible in your sidebar.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Enter your admin token to activate the Admin Panel for this
-              account.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                type="password"
-                placeholder="Admin token…"
-                value={token}
-                onChange={(e) => {
-                  setToken(e.target.value);
-                  setStatus("idle");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleClaim();
-                }}
-                className="flex-1 text-sm bg-background border-border"
-                data-ocid="admin.claim.input"
-              />
-              <Button
-                type="button"
-                disabled={loading || !token.trim()}
-                onClick={handleClaim}
-                className="bg-teal hover:bg-teal/90 text-white btn-teal-text px-4"
-                data-ocid="admin.claim.button"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Activate"
-                )}
-              </Button>
-            </div>
-            {status === "error" && (
-              <p
-                className="text-xs text-red-400"
-                data-ocid="admin.claim.error_state"
-              >
-                Invalid token. Please try again.
-              </p>
-            )}
-          </>
-        )}
+  if (status === "success") {
+    return (
+      <div className="px-3 py-2 rounded-md bg-teal/10 border border-teal/20 flex items-center gap-2">
+        <Shield className="w-3.5 h-3.5 text-teal shrink-0" />
+        <p className="text-[11px] text-teal font-semibold">
+          Admin access granted!
+        </p>
       </div>
-    </div>,
-    document.body,
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-[11px] font-medium text-amber-400/80 hover:text-amber-400 hover:bg-amber-400/5 border border-amber-400/10 hover:border-amber-400/20 transition-all duration-150"
+        data-ocid="admin.claim.open_modal_button"
+      >
+        <Shield className="w-3.5 h-3.5 shrink-0" />
+        <span>App Owner? Claim Admin</span>
+        <ChevronRight
+          className={cn(
+            "w-3 h-3 ml-auto transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+        />
+      </button>
+
+      {expanded && (
+        <div className="px-1 space-y-2">
+          <p className="text-[10px] text-muted-foreground leading-relaxed px-1">
+            Enter your admin token. Once claimed, no one else can become admin.
+          </p>
+          <Input
+            type="password"
+            placeholder="Admin token…"
+            value={token}
+            onChange={(e) => {
+              setToken(e.target.value);
+              setStatus("idle");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleClaim();
+            }}
+            className="h-7 text-[11px] bg-background border-border"
+            data-ocid="admin.claim.input"
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={loading || !token.trim()}
+            onClick={handleClaim}
+            className="w-full h-7 text-[11px] bg-amber-500 hover:bg-amber-500/90 text-white font-semibold"
+            data-ocid="admin.claim.button"
+          >
+            {loading ? (
+              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+            ) : (
+              <Shield className="w-3 h-3 mr-1" />
+            )}
+            {loading ? "Claiming…" : "Claim Admin Access"}
+          </Button>
+          {status === "error" && (
+            <p
+              className="text-[10px] text-red-400 px-1"
+              data-ocid="admin.claim.error_state"
+            >
+              Invalid token. Please try again.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -268,9 +233,9 @@ export default function AppLayout({
   const AuthPanel = ({ isMobile = false }: { isMobile?: boolean }) => (
     <div className={cn("space-y-3", isMobile ? "" : "")}>
       <div className="px-3 py-2 rounded-md bg-sidebar-accent">
-        <p className="text-[11px] text-muted-foreground">Signed in</p>
+        <p className="text-[11px] text-muted-foreground">Signed in as</p>
         <p className="text-xs font-mono text-teal truncate">
-          {identity?.getPrincipal().toString().slice(0, 20)}...
+          {identity?.getPrincipal().toString().slice(0, 22)}…
         </p>
       </div>
 
@@ -300,6 +265,11 @@ export default function AppLayout({
           ))}
         </div>
       </div>
+
+      {/* Claim Admin — only visible to non-admin authenticated users */}
+      {!isAdmin && (
+        <ClaimAdminSection actor={actor} onAdminGranted={onAdminGranted} />
+      )}
 
       <Button
         variant="outline"
@@ -514,9 +484,6 @@ export default function AppLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto lg:pt-0 pt-14">{children}</main>
-
-      {/* Hidden admin setup — only triggers via #admin-setup URL hash */}
-      <HiddenAdminSetupModal actor={actor} onAdminGranted={onAdminGranted} />
     </div>
   );
 }

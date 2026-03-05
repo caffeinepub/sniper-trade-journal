@@ -26,16 +26,30 @@ export default function App() {
   const isAuthenticated = !!identity;
   const { actor, isFetching: actorFetching } = useActor();
 
-  // Check admin status after actor is ready
+  // Auto-register user and check admin status after actor is ready
   useEffect(() => {
     if (!isAuthenticated || !actor || actorFetching) {
       if (!isAuthenticated) setIsAdmin(false);
       return;
     }
-    actor
-      .isCallerAdmin()
-      .then(setIsAdmin)
-      .catch(() => setIsAdmin(false));
+    // Auto-register: calling with empty string registers as a regular user
+    // (or no-ops if already registered). This is safe to call every time.
+    (
+      actor as unknown as {
+        _initializeAccessControlWithSecret: (t: string) => Promise<void>;
+      }
+    )
+      ._initializeAccessControlWithSecret("")
+      .catch(() => {
+        // ignore registration errors — user may already be registered
+      })
+      .finally(() => {
+        // After registration attempt, check actual admin status
+        actor
+          .isCallerAdmin()
+          .then(setIsAdmin)
+          .catch(() => setIsAdmin(false));
+      });
   }, [isAuthenticated, actor, actorFetching]);
 
   const handleNavigate = (page: AppPage, id?: string) => {
