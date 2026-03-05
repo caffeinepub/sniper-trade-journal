@@ -54,6 +54,12 @@ export interface DrillInput {
   'symbol' : string,
 }
 export type ExternalBlob = Uint8Array;
+export interface PlatformStats {
+  'totalTrades' : bigint,
+  'totalUsersWithTrades' : bigint,
+  'avgWinRate' : number,
+  'mostActiveTrader' : Principal,
+}
 export interface Trade {
   'id' : string,
   'result' : string,
@@ -118,6 +124,17 @@ export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface UserStats {
+  'totalTrades' : bigint,
+  'avgRR' : number,
+  'owner' : Principal,
+  'wins' : bigint,
+  'losses' : bigint,
+  'totalNetR' : number,
+  'avgRMultiple' : number,
+  'winRate' : number,
+  'mostRecentTradeDate' : string,
+}
 export interface _CaffeineStorageCreateCertificateResult {
   'method' : string,
   'blob_hash' : string,
@@ -146,6 +163,10 @@ export interface _SERVICE {
   >,
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'adminGetAllUsers' : ActorMethod<[], Array<UserStats>>,
+  'adminGetPlatformStats' : ActorMethod<[], PlatformStats>,
+  'adminGetUserStats' : ActorMethod<[Principal], Analytics>,
+  'adminGetUserTrades' : ActorMethod<[Principal], Array<Trade>>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'createDrill' : ActorMethod<[DrillInput], Drill>,
   'createTrade' : ActorMethod<[TradeInput], Trade>,

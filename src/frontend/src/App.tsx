@@ -1,7 +1,9 @@
 import AppLayout, { type AppPage } from "@/components/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
+import { useActor } from "@/hooks/useActor";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { ThemeProvider } from "@/hooks/useTheme";
+import AdminPage from "@/pages/AdminPage";
 import CalendarPage from "@/pages/CalendarPage";
 import DashboardPage from "@/pages/DashboardPage";
 import DrillJournalPage from "@/pages/DrillJournalPage";
@@ -12,17 +14,36 @@ import ReviewPage from "@/pages/ReviewPage";
 import SignInPage from "@/pages/SignInPage";
 import TradeFormPage from "@/pages/TradeFormPage";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
   const [editTradeId, setEditTradeId] = useState<string | undefined>(undefined);
   const [editDrillId, setEditDrillId] = useState<string | undefined>(undefined);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { identity, login, isLoggingIn, isInitializing } =
     useInternetIdentity();
   const isAuthenticated = !!identity;
+  const { actor, isFetching: actorFetching } = useActor();
+
+  // Check admin status after actor is ready
+  useEffect(() => {
+    if (!isAuthenticated || !actor || actorFetching) {
+      if (!isAuthenticated) setIsAdmin(false);
+      return;
+    }
+    actor
+      .isCallerAdmin()
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false));
+  }, [isAuthenticated, actor, actorFetching]);
 
   const handleNavigate = (page: AppPage, id?: string) => {
+    // Guard: non-admin cannot access admin page
+    if (page === "admin" && !isAdmin) {
+      setCurrentPage("dashboard");
+      return;
+    }
     setCurrentPage(page);
     if (page === "new-trade") {
       setEditTradeId(id);
@@ -35,6 +56,13 @@ export default function App() {
       setEditDrillId(undefined);
     }
   };
+
+  // Redirect if on admin page but not admin
+  useEffect(() => {
+    if (currentPage === "admin" && !isAdmin && isAuthenticated) {
+      setCurrentPage("dashboard");
+    }
+  }, [currentPage, isAdmin, isAuthenticated]);
 
   // Full-screen loading spinner while auth initializes
   if (isInitializing) {
@@ -70,7 +98,11 @@ export default function App() {
   // Authenticated app
   return (
     <ThemeProvider>
-      <AppLayout currentPage={currentPage} onNavigate={handleNavigate}>
+      <AppLayout
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        isAdmin={isAdmin}
+      >
         {currentPage === "dashboard" && <DashboardPage />}
         {currentPage === "journal" && (
           <JournalPage onNavigate={handleNavigate} />
@@ -92,6 +124,7 @@ export default function App() {
         {currentPage === "mastery-journal" && (
           <DrillJournalPage onNavigate={handleNavigate} />
         )}
+        {currentPage === "admin" && isAdmin && <AdminPage />}
 
         <Toaster
           theme="dark"

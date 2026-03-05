@@ -13,6 +13,7 @@ import {
   Menu,
   Moon,
   Plus,
+  Shield,
   Sun,
   Swords,
   X,
@@ -27,7 +28,8 @@ export type AppPage =
   | "review"
   | "mastery"
   | "mastery-new-drill"
-  | "mastery-journal";
+  | "mastery-journal"
+  | "admin";
 
 interface NavItem {
   id: AppPage;
@@ -76,6 +78,7 @@ interface AppLayoutProps {
   currentPage: AppPage;
   onNavigate: (page: AppPage, id?: string) => void;
   children: React.ReactNode;
+  isAdmin?: boolean;
 }
 
 const THEME_OPTIONS = [
@@ -87,6 +90,7 @@ export default function AppLayout({
   currentPage,
   onNavigate,
   children,
+  isAdmin = false,
 }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { identity, login, clear, isLoggingIn, isInitializing } =
@@ -146,6 +150,25 @@ export default function AppLayout({
               </button>
             );
           })}
+          {isAdmin && (
+            <button
+              type="button"
+              data-ocid="nav.admin.link"
+              onClick={() => handleNav("admin")}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 mt-2 border",
+                currentPage === "admin"
+                  ? "bg-teal-muted text-teal border-teal/30"
+                  : "text-amber-400 border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10 hover:border-amber-400/30",
+              )}
+            >
+              <Shield className="w-4 h-4 shrink-0" />
+              Admin Panel
+              {currentPage === "admin" && (
+                <ChevronRight className="w-3 h-3 ml-auto opacity-60" />
+              )}
+            </button>
+          )}
         </nav>
 
         {/* Auth */}
@@ -286,6 +309,22 @@ export default function AppLayout({
                   </button>
                 );
               })}
+              {isAdmin && (
+                <button
+                  type="button"
+                  data-ocid="nav.admin.link"
+                  onClick={() => handleNav("admin")}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all mt-2 border",
+                    currentPage === "admin"
+                      ? "bg-teal-muted text-teal border-teal/30"
+                      : "text-amber-400 border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10",
+                  )}
+                >
+                  <Shield className="w-4 h-4 shrink-0" />
+                  Admin Panel
+                </button>
+              )}
             </nav>
             <div className="px-3 pb-5 border-t border-sidebar-border pt-4">
               {isAuthenticated ? (

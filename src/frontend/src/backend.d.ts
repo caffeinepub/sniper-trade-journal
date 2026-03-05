@@ -117,6 +117,23 @@ export interface TradeInput {
     symbol: string;
     mainLesson: string;
 }
+export interface PlatformStats {
+    totalTrades: bigint;
+    totalUsersWithTrades: bigint;
+    avgWinRate: number;
+    mostActiveTrader: Principal;
+}
+export interface UserStats {
+    totalTrades: bigint;
+    avgRR: number;
+    owner: Principal;
+    wins: bigint;
+    losses: bigint;
+    totalNetR: number;
+    avgRMultiple: number;
+    winRate: number;
+    mostRecentTradeDate: string;
+}
 export interface UserProfile {
     name: string;
 }
@@ -126,6 +143,10 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
+    adminGetAllUsers(): Promise<Array<UserStats>>;
+    adminGetPlatformStats(): Promise<PlatformStats>;
+    adminGetUserStats(user: Principal): Promise<Analytics>;
+    adminGetUserTrades(user: Principal): Promise<Array<Trade>>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createDrill(input: DrillInput): Promise<Drill>;
     createTrade(input: TradeInput): Promise<Trade>;
