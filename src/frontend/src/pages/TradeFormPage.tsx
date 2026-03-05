@@ -336,6 +336,12 @@ export default function TradeFormPage({
   const pendingSaveRef = useRef<"save" | "add" | null>(null);
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  // Keep a ref to always have the latest form for async callbacks (avoids stale closure)
+  const formRef = useRef<FormState>(DEFAULT_FORM);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [customTag, setCustomTag] = useState("");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
@@ -433,6 +439,12 @@ export default function TradeFormPage({
     return null;
   }, [form.entryPrice, form.stopLoss, form.takeProfit]);
 
+  // Keep refs for async access in _executeSave to avoid stale closures
+  const calculatedRRRef = useRef<number | null>(null);
+  useEffect(() => {
+    calculatedRRRef.current = calculatedRR;
+  }, [calculatedRR]);
+
   const calculatedRMultiple = useMemo(() => {
     if (calculatedRR === null) return null;
     const risk = Number.parseFloat(form.riskPercent);
@@ -472,13 +484,15 @@ export default function TradeFormPage({
   };
 
   const buildTradeInput = async (): Promise<TradeInput | null> => {
-    const entry = Number.parseFloat(form.entryPrice);
-    const sl = Number.parseFloat(form.stopLoss) || 0;
-    const tp = Number.parseFloat(form.takeProfit) || 0;
-    const risk = Number.parseFloat(form.riskPercent) || 1;
-    const pnl = Number.parseFloat(form.pnlPercent) || 0;
-    const rrRatio = calculatedRR ?? 0;
-    const rMultiple = calcRMultiple(form.result, rrRatio, pnl, risk);
+    // Always read from refs to avoid stale closure values in async save paths
+    const currentForm = formRef.current;
+    const entry = Number.parseFloat(currentForm.entryPrice);
+    const sl = Number.parseFloat(currentForm.stopLoss) || 0;
+    const tp = Number.parseFloat(currentForm.takeProfit) || 0;
+    const risk = Number.parseFloat(currentForm.riskPercent) || 1;
+    const pnl = Number.parseFloat(currentForm.pnlPercent) || 0;
+    const rrRatio = calculatedRRRef.current ?? 0;
+    const rMultiple = calcRMultiple(currentForm.result, rrRatio, pnl, risk);
 
     let screenshot: ExternalBlob | undefined;
     if (screenshotFile) {
@@ -494,31 +508,31 @@ export default function TradeFormPage({
     }
 
     const input: TradeInput = {
-      date: form.date,
-      symbol: form.symbol.toUpperCase(),
-      session: form.session,
-      timeframe: form.timeframe,
-      direction: form.direction,
-      biasBeforeEntry: form.biasBeforeEntry,
-      setupType: form.setupType,
-      entryReason: form.entryReason,
+      date: currentForm.date,
+      symbol: currentForm.symbol.toUpperCase(),
+      session: currentForm.session,
+      timeframe: currentForm.timeframe,
+      direction: currentForm.direction,
+      biasBeforeEntry: currentForm.biasBeforeEntry,
+      setupType: currentForm.setupType,
+      entryReason: currentForm.entryReason,
       entryPrice: entry,
       stopLoss: sl,
       takeProfit: tp,
       riskPercent: risk,
       pnlPercent: pnl,
-      result: form.result,
+      result: currentForm.result,
       rrRatio,
       rMultiple,
-      psychBefore: form.psychBefore,
-      psychDuring: form.psychDuring,
-      psychAfter: form.psychAfter,
-      followedRules: form.followedRules,
-      exitedEarly: form.exitedEarly,
-      movedStopLoss: form.movedStopLoss,
-      setupGrade: form.setupGrade,
-      tags: form.tags,
-      mainLesson: form.mainLesson,
+      psychBefore: currentForm.psychBefore,
+      psychDuring: currentForm.psychDuring,
+      psychAfter: currentForm.psychAfter,
+      followedRules: currentForm.followedRules,
+      exitedEarly: currentForm.exitedEarly,
+      movedStopLoss: currentForm.movedStopLoss,
+      setupGrade: currentForm.setupGrade,
+      tags: currentForm.tags,
+      mainLesson: currentForm.mainLesson,
       screenshot,
     };
 
@@ -534,6 +548,7 @@ export default function TradeFormPage({
   };
 
   // Core save logic — called once actor is confirmed ready
+  // Always reads from refs to avoid stale closure bugs
   const _executeSave = async (mode: "save" | "add") => {
     const currentActor = actorRef.current;
     if (!currentActor) {
@@ -543,7 +558,8 @@ export default function TradeFormPage({
       return;
     }
 
-    const validationErrors = validateForm(form);
+    // Use formRef to get the latest form state (avoids stale closure)
+    const validationErrors = validateForm(formRef.current);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
@@ -592,7 +608,7 @@ export default function TradeFormPage({
 
     // If actor isn't ready yet, queue the save and show a waiting state
     if (!actor || isActorLoading) {
-      const validationErrors = validateForm(form);
+      const validationErrors = validateForm(formRef.current);
       setErrors(validationErrors);
       if (Object.keys(validationErrors).length > 0) return;
       pendingSaveRef.current = "save";
@@ -611,7 +627,7 @@ export default function TradeFormPage({
     }
 
     if (!actor || isActorLoading) {
-      const validationErrors = validateForm(form);
+      const validationErrors = validateForm(formRef.current);
       setErrors(validationErrors);
       if (Object.keys(validationErrors).length > 0) return;
       pendingSaveRef.current = "add";
@@ -1138,7 +1154,7 @@ export default function TradeFormPage({
               data-ocid="trade.form.submit_button"
               type="submit"
               disabled={isPending || waitingForActor}
-              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold"
+              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-white font-semibold"
               size="lg"
             >
               {waitingForActor && pendingSaveRef.current === "save" ? (

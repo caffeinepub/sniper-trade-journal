@@ -84,7 +84,7 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
       {/* Header / Logo bar */}
       <header className="relative z-10 flex items-center gap-3 px-6 py-5 border-b border-border/40">
         <div className="w-8 h-8 rounded-md bg-teal flex items-center justify-center shrink-0">
-          <Target className="w-4 h-4 text-[oklch(var(--primary-foreground))]" />
+          <Target className="w-4 h-4 text-white" />
         </div>
         <span className="font-semibold text-sm text-foreground tracking-wide">
           Sniper Trade Journal

@@ -199,7 +199,7 @@ export default function AppLayout({
           ) : (
             <Button
               size="sm"
-              className="w-full bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] text-xs"
+              className="w-full bg-teal hover:bg-teal/90 text-white text-xs"
               onClick={login}
               disabled={isLoggingIn || isInitializing}
             >
@@ -339,7 +339,7 @@ export default function AppLayout({
               ) : (
                 <Button
                   size="sm"
-                  className="w-full bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] text-xs"
+                  className="w-full bg-teal hover:bg-teal/90 text-white text-xs"
                   onClick={login}
                   disabled={isLoggingIn}
                 >

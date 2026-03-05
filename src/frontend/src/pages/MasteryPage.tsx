@@ -265,11 +265,12 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2">
           <Button
             data-ocid="mastery.dashboard.secondary_button"
             variant="outline"
-            className="border-teal/30 text-teal hover:bg-teal-muted gap-2"
+            size="sm"
+            className="border-teal/30 text-teal hover:bg-teal-muted font-semibold gap-2 flex-1 sm:flex-none"
             onClick={() => onNavigate("mastery-journal")}
           >
             <BookOpen className="w-4 h-4" />
@@ -277,7 +278,8 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
           </Button>
           <Button
             data-ocid="mastery.dashboard.primary_button"
-            className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-2"
+            size="sm"
+            className="bg-teal hover:bg-teal/90 text-white font-semibold gap-2 flex-1 sm:flex-none"
             onClick={() => onNavigate("mastery-new-drill")}
           >
             <Plus className="w-4 h-4" />

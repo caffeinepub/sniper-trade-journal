@@ -635,7 +635,7 @@ export default function JournalPage({ onNavigate }: JournalPageProps) {
           <Button
             data-ocid="journal.new_trade.primary_button"
             size="sm"
-            className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-1.5"
+            className="bg-teal hover:bg-teal/90 text-white font-semibold gap-1.5"
             onClick={() => onNavigate("new-trade")}
           >
             <Plus className="w-3.5 h-3.5" />

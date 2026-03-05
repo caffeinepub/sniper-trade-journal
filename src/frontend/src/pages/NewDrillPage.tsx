@@ -563,7 +563,7 @@ export default function NewDrillPage({
               data-ocid="drill.form.submit_button"
               type="submit"
               disabled={isPending || waitingForActor}
-              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold"
+              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-white font-semibold"
               size="lg"
             >
               {waitingForActor && pendingSaveRef.current === "save" ? (

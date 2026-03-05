@@ -48,6 +48,30 @@ function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+interface DayStats {
+  total: number;
+  wins: number;
+  losses: number;
+  bes: number;
+  netR: number;
+  winRate: number;
+  bestR: number;
+  worstR: number;
+}
+
+function computeDayStats(dayTrades: Trade[]): DayStats {
+  const total = dayTrades.length;
+  const wins = dayTrades.filter((t) => t.result === "Win").length;
+  const losses = dayTrades.filter((t) => t.result === "Loss").length;
+  const bes = dayTrades.filter((t) => t.result === "BreakEven").length;
+  const netR = dayTrades.reduce((s, t) => s + t.rMultiple, 0);
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  const rValues = dayTrades.map((t) => t.rMultiple);
+  const bestR = rValues.length > 0 ? Math.max(...rValues) : 0;
+  const worstR = rValues.length > 0 ? Math.min(...rValues) : 0;
+  return { total, wins, losses, bes, netR, winRate, bestR, worstR };
+}
+
 function CalendarCell({
   day,
   today,
@@ -61,18 +85,17 @@ function CalendarCell({
   onSelect: (key: string) => void;
 }) {
   if (!day) {
-    return <div className="aspect-square" />;
+    return <div className="min-h-[52px]" />;
   }
 
   const key = toDateKey(day);
   const todayKey = toDateKey(today);
   const dayTrades = tradesByDate[key] ?? [];
   const isToday = key === todayKey;
-  const wins = dayTrades.filter((t) => t.result === "Win").length;
-  const losses = dayTrades.filter((t) => t.result === "Loss").length;
-  const bes = dayTrades.filter((t) => t.result === "BreakEven").length;
   const hasTrades = dayTrades.length > 0;
   const isPast = day <= today;
+
+  const stats = hasTrades ? computeDayStats(dayTrades) : null;
 
   return (
     <button
@@ -82,7 +105,7 @@ function CalendarCell({
         if (hasTrades) onSelect(key);
       }}
       className={cn(
-        "aspect-square rounded-md p-1 text-xs transition-all flex flex-col items-center justify-start",
+        "min-h-[52px] rounded-md p-1 text-xs transition-all flex flex-col items-center justify-start w-full",
         isToday && "ring-1 ring-teal",
         hasTrades ? "cursor-pointer hover:bg-muted/80" : "cursor-default",
         !isPast && "opacity-40",
@@ -97,33 +120,41 @@ function CalendarCell({
       >
         {day.getDate()}
       </span>
-      {hasTrades && (
-        <div className="flex gap-0.5 flex-wrap justify-center">
-          {wins > 0 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-win" />
-          )}
-          {wins > 1 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-win" />
-          )}
-          {wins > 2 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-win" />
-          )}
-          {losses > 0 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-loss" />
-          )}
-          {losses > 1 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-loss" />
-          )}
-          {losses > 2 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-trade-loss" />
-          )}
-          {bes > 0 && <div className="w-1.5 h-1.5 rounded-full bg-trade-be" />}
-          {dayTrades.length > 6 && (
-            <span className="text-[9px] text-muted-foreground">
-              +{dayTrades.length - 6}
-            </span>
-          )}
-        </div>
+      {stats && (
+        <>
+          {/* Colored dots row */}
+          <div className="flex gap-0.5 flex-wrap justify-center mb-0.5">
+            {Array.from({ length: Math.min(stats.wins, 3) }).map((_, i) => (
+              <div
+                key={`w${String(i)}`}
+                className="w-1.5 h-1.5 rounded-full bg-trade-win"
+              />
+            ))}
+            {Array.from({ length: Math.min(stats.losses, 3) }).map((_, i) => (
+              <div
+                key={`l${String(i)}`}
+                className="w-1.5 h-1.5 rounded-full bg-trade-loss"
+              />
+            ))}
+            {stats.bes > 0 && (
+              <div className="w-1.5 h-1.5 rounded-full bg-trade-be" />
+            )}
+          </div>
+          {/* Trade count */}
+          <span className="text-[8px] font-mono text-muted-foreground leading-none mb-0.5">
+            {stats.total}T
+          </span>
+          {/* Net R */}
+          <span
+            className={cn(
+              "text-[8px] font-mono leading-none font-semibold",
+              stats.netR >= 0 ? "text-trade-win" : "text-trade-loss",
+            )}
+          >
+            {stats.netR >= 0 ? "+" : ""}
+            {stats.netR.toFixed(1)}R
+          </span>
+        </>
       )}
     </button>
   );
@@ -320,7 +351,85 @@ export default function CalendarPage() {
                 : ""}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+
+          {/* Daily summary strip */}
+          {selectedTrades.length > 0 &&
+            (() => {
+              const ds = computeDayStats(selectedTrades);
+              return (
+                <div className="grid grid-cols-3 gap-2 mb-1">
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      Trades
+                    </p>
+                    <p className="text-sm font-bold font-mono">{ds.total}</p>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      W / L / B
+                    </p>
+                    <p className="text-sm font-bold font-mono">
+                      <span className="text-trade-win">{ds.wins}</span>
+                      <span className="text-muted-foreground">/</span>
+                      <span className="text-trade-loss">{ds.losses}</span>
+                      <span className="text-muted-foreground">/</span>
+                      <span className="text-trade-be">{ds.bes}</span>
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      Win Rate
+                    </p>
+                    <p
+                      className={cn(
+                        "text-sm font-bold font-mono",
+                        ds.winRate >= 50 ? "text-trade-win" : "text-trade-loss",
+                      )}
+                    >
+                      {ds.winRate.toFixed(0)}%
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      Net R
+                    </p>
+                    <p
+                      className={cn(
+                        "text-sm font-bold font-mono",
+                        ds.netR >= 0 ? "text-trade-win" : "text-trade-loss",
+                      )}
+                    >
+                      {ds.netR >= 0 ? "+" : ""}
+                      {ds.netR.toFixed(2)}R
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      Best
+                    </p>
+                    <p className="text-sm font-bold font-mono text-trade-win">
+                      +{ds.bestR.toFixed(2)}R
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-1">
+                      Worst
+                    </p>
+                    <p
+                      className={cn(
+                        "text-sm font-bold font-mono",
+                        ds.worstR >= 0 ? "text-trade-win" : "text-trade-loss",
+                      )}
+                    >
+                      {ds.worstR >= 0 ? "+" : ""}
+                      {ds.worstR.toFixed(2)}R
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
             {selectedTrades.map((trade) => (
               <div
                 key={trade.id}

@@ -408,7 +408,7 @@ export default function DrillJournalPage({
         </div>
         <Button
           data-ocid="drill.journal.primary_button"
-          className="bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] font-semibold gap-2"
+          className="bg-teal hover:bg-teal/90 text-white font-semibold gap-2"
           onClick={() => onNavigate("mastery-new-drill")}
           size="sm"
         >
@@ -494,7 +494,7 @@ export default function DrillJournalPage({
             <Button
               data-ocid="drill.journal.start_drill.primary_button"
               size="sm"
-              className="mt-3 bg-teal hover:bg-teal/90 text-[oklch(var(--primary-foreground))] gap-2"
+              className="mt-3 bg-teal hover:bg-teal/90 text-white gap-2"
               onClick={() => onNavigate("mastery-new-drill")}
             >
               <Plus className="w-3.5 h-3.5" />
