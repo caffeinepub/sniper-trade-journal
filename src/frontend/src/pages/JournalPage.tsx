@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDeleteTrade, useGetTrades } from "@/hooks/useQueries";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { cn } from "@/lib/utils";
 import { resolveScreenshotUrl } from "@/utils/screenshot";
 import {
@@ -531,6 +532,7 @@ function TradeDetailModal({
 export default function JournalPage({ onNavigate }: JournalPageProps) {
   const { data: tradesData, isLoading } = useGetTrades();
   const deleteTrade = useDeleteTrade();
+  const tealTextClass = useTealButtonTextClass();
 
   const [filterSymbol, setFilterSymbol] = useState("");
   const [filterSession, setFilterSession] = useState("all");
@@ -636,7 +638,7 @@ export default function JournalPage({ onNavigate }: JournalPageProps) {
           <Button
             data-ocid="journal.new_trade.primary_button"
             size="sm"
-            className="bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold gap-1.5"
+            className={`bg-teal hover:bg-teal/90 ${tealTextClass} font-semibold gap-1.5`}
             onClick={() => onNavigate("new-trade")}
           >
             <Plus className="w-3.5 h-3.5" />

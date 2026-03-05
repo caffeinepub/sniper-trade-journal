@@ -16,6 +16,7 @@ import {
   useGetTradeById,
   useUpdateTrade,
 } from "@/hooks/useQueries";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { cn } from "@/lib/utils";
 import {
   GRADE_STORAGE,
@@ -331,6 +332,7 @@ export default function TradeFormPage({
   const updateTrade = useUpdateTrade();
   const { identity } = useInternetIdentity();
   const { actor, isFetching: isActorLoading } = useActor();
+  const tealTextClass = useTealButtonTextClass();
   const [waitingForActor, setWaitingForActor] = useState(false);
   // 'save' = go to journal after, 'add' = reset form and stay
   const pendingSaveRef = useRef<"save" | "add" | null>(null);
@@ -1154,7 +1156,7 @@ export default function TradeFormPage({
               data-ocid="trade.form.submit_button"
               type="submit"
               disabled={isPending || waitingForActor}
-              className="flex-1 sm:flex-none bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold"
+              className={`flex-1 sm:flex-none bg-teal hover:bg-teal/90 ${tealTextClass} font-semibold`}
               size="lg"
             >
               {waitingForActor && pendingSaveRef.current === "save" ? (

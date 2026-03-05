@@ -181,6 +181,7 @@ export interface _SERVICE {
   'getTrades' : ActorMethod<[], Array<Trade>>,
   'getUniqueTags' : ActorMethod<[], Array<string>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'isAdminAssigned' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateDrill' : ActorMethod<[string, DrillInput], [] | [Drill]>,

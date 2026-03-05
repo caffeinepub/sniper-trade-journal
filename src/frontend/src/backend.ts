@@ -254,6 +254,7 @@ export interface backendInterface {
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    isAdminAssigned(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateDrill(id: string, input: DrillInput): Promise<Drill | null>;
@@ -610,6 +611,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getUserProfile(arg0);
             return from_candid_opt_n22(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async isAdminAssigned(): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.isAdminAssigned();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.isAdminAssigned();
+            return result;
         }
     }
     async isCallerAdmin(): Promise<boolean> {

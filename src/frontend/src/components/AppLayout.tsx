@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
@@ -84,6 +84,7 @@ interface AppLayoutProps {
   isAdmin?: boolean;
   actor?: backendInterface | null;
   onAdminGranted?: () => Promise<void>;
+  adminAlreadyAssigned?: boolean | null;
 }
 
 const THEME_OPTIONS = [
@@ -93,23 +94,24 @@ const THEME_OPTIONS = [
 
 /**
  * Inline "Claim Admin" section shown inside the sidebar auth panel.
- * Visible only to authenticated non-admin users.
- * The first person who uses the correct admin token becomes admin permanently.
+ * Visible only to authenticated non-admin users when no admin has been
+ * assigned yet. The first person to click "Claim Admin" becomes the
+ * permanent admin — no token required.
  */
 function ClaimAdminSection({
   actor,
   onAdminGranted,
+  adminAlreadyAssigned,
 }: {
   actor: backendInterface | null | undefined;
   onAdminGranted?: () => Promise<void>;
+  adminAlreadyAssigned?: boolean | null;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
 
   const handleClaim = async () => {
-    if (!actor || !token.trim()) return;
+    if (!actor) return;
     setLoading(true);
     setStatus("idle");
     try {
@@ -117,11 +119,10 @@ function ClaimAdminSection({
         actor as unknown as {
           _initializeAccessControlWithSecret: (t: string) => Promise<void>;
         }
-      )._initializeAccessControlWithSecret(token.trim());
+      )._initializeAccessControlWithSecret("");
       const isNowAdmin = await actor.isCallerAdmin();
       if (isNowAdmin) {
         setStatus("success");
-        setToken("");
         if (onAdminGranted) await onAdminGranted();
       } else {
         setStatus("error");
@@ -132,6 +133,9 @@ function ClaimAdminSection({
       setLoading(false);
     }
   };
+
+  // Hide entirely if admin is already assigned by another user
+  if (adminAlreadyAssigned) return null;
 
   if (status === "success") {
     return (
@@ -146,65 +150,31 @@ function ClaimAdminSection({
 
   return (
     <div className="space-y-1.5">
-      <button
+      <p className="text-[10px] text-muted-foreground leading-relaxed px-1">
+        First login? Tap below to claim permanent admin access.
+      </p>
+      <Button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-[11px] font-medium text-amber-400/80 hover:text-amber-400 hover:bg-amber-400/5 border border-amber-400/10 hover:border-amber-400/20 transition-all duration-150"
-        data-ocid="admin.claim.open_modal_button"
+        size="sm"
+        disabled={loading}
+        onClick={handleClaim}
+        className="w-full h-7 text-[11px] bg-amber-500 hover:bg-amber-500/90 text-white font-semibold"
+        data-ocid="admin.claim.button"
       >
-        <Shield className="w-3.5 h-3.5 shrink-0" />
-        <span>App Owner? Claim Admin</span>
-        <ChevronRight
-          className={cn(
-            "w-3 h-3 ml-auto transition-transform duration-150",
-            expanded && "rotate-90",
-          )}
-        />
-      </button>
-
-      {expanded && (
-        <div className="px-1 space-y-2">
-          <p className="text-[10px] text-muted-foreground leading-relaxed px-1">
-            Enter your admin token. Once claimed, no one else can become admin.
-          </p>
-          <Input
-            type="password"
-            placeholder="Admin token…"
-            value={token}
-            onChange={(e) => {
-              setToken(e.target.value);
-              setStatus("idle");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleClaim();
-            }}
-            className="h-7 text-[11px] bg-background border-border"
-            data-ocid="admin.claim.input"
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={loading || !token.trim()}
-            onClick={handleClaim}
-            className="w-full h-7 text-[11px] bg-amber-500 hover:bg-amber-500/90 text-white font-semibold"
-            data-ocid="admin.claim.button"
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin mr-1" />
-            ) : (
-              <Shield className="w-3 h-3 mr-1" />
-            )}
-            {loading ? "Claiming…" : "Claim Admin Access"}
-          </Button>
-          {status === "error" && (
-            <p
-              className="text-[10px] text-red-400 px-1"
-              data-ocid="admin.claim.error_state"
-            >
-              Invalid token. Please try again.
-            </p>
-          )}
-        </div>
+        {loading ? (
+          <Loader2 className="w-3 h-3 animate-spin mr-1" />
+        ) : (
+          <Shield className="w-3 h-3 mr-1" />
+        )}
+        {loading ? "Claiming…" : "Claim Admin"}
+      </Button>
+      {status === "error" && (
+        <p
+          className="text-[10px] text-red-400 px-1"
+          data-ocid="admin.claim.error_state"
+        >
+          Could not claim admin. Please try again.
+        </p>
       )}
     </div>
   );
@@ -217,12 +187,14 @@ export default function AppLayout({
   isAdmin = false,
   actor,
   onAdminGranted,
+  adminAlreadyAssigned = null,
 }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { identity, login, clear, isLoggingIn, isInitializing } =
     useInternetIdentity();
   const isAuthenticated = !!identity;
   const { theme, setTheme } = useTheme();
+  const tealTextClass = useTealButtonTextClass();
 
   const handleNav = (page: AppPage) => {
     onNavigate(page);
@@ -266,9 +238,14 @@ export default function AppLayout({
         </div>
       </div>
 
-      {/* Claim Admin — only visible to non-admin authenticated users */}
-      {!isAdmin && (
-        <ClaimAdminSection actor={actor} onAdminGranted={onAdminGranted} />
+      {/* Claim Admin — only visible to the very first user (when no admin has ever been assigned).
+          Hidden while still loading (null) and hidden once any admin exists (true). */}
+      {!isAdmin && adminAlreadyAssigned === false && (
+        <ClaimAdminSection
+          actor={actor}
+          onAdminGranted={onAdminGranted}
+          adminAlreadyAssigned={adminAlreadyAssigned}
+        />
       )}
 
       <Button
@@ -359,7 +336,7 @@ export default function AppLayout({
           ) : (
             <Button
               size="sm"
-              className="w-full bg-teal hover:bg-teal/90 text-white btn-teal-text text-xs"
+              className={`w-full bg-teal hover:bg-teal/90 ${tealTextClass} text-xs`}
               onClick={login}
               disabled={isLoggingIn || isInitializing}
             >
@@ -469,7 +446,7 @@ export default function AppLayout({
               ) : (
                 <Button
                   size="sm"
-                  className="w-full bg-teal hover:bg-teal/90 text-white btn-teal-text text-xs"
+                  className={`w-full bg-teal hover:bg-teal/90 ${tealTextClass} text-xs`}
                   onClick={login}
                   disabled={isLoggingIn}
                 >

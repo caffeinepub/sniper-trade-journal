@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDeleteDrill, useGetDrills } from "@/hooks/useQueries";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { cn } from "@/lib/utils";
 import { resolveScreenshotUrl } from "@/utils/screenshot";
 import {
@@ -344,6 +345,7 @@ export default function DrillJournalPage({
 }: DrillJournalPageProps) {
   const { data: drillsData, isLoading } = useGetDrills();
   const deleteDrill = useDeleteDrill();
+  const tealTextClass = useTealButtonTextClass();
 
   const [filterSymbol, setFilterSymbol] = useState("");
   const [filterDrillType, setFilterDrillType] = useState("all");
@@ -408,7 +410,7 @@ export default function DrillJournalPage({
         </div>
         <Button
           data-ocid="drill.journal.primary_button"
-          className="bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold gap-2"
+          className={`bg-teal hover:bg-teal/90 ${tealTextClass} font-semibold gap-2`}
           onClick={() => onNavigate("mastery-new-drill")}
           size="sm"
         >
@@ -494,7 +496,7 @@ export default function DrillJournalPage({
             <Button
               data-ocid="drill.journal.start_drill.primary_button"
               size="sm"
-              className="mt-3 bg-teal hover:bg-teal/90 text-white btn-teal-text gap-2"
+              className={`mt-3 bg-teal hover:bg-teal/90 ${tealTextClass} gap-2`}
               onClick={() => onNavigate("mastery-new-drill")}
             >
               <Plus className="w-3.5 h-3.5" />

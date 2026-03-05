@@ -18,11 +18,9 @@ import MixinStorage "blob-storage/Mixin";
 actor {
   include MixinStorage();
 
-  // Access Control state
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Types
   type Trade = {
     id : Text;
     owner : Principal;
@@ -135,12 +133,10 @@ actor {
     name : Text;
   };
 
-  // Persistent storage MUST use stable let
-  stable let trades = Map.empty<Text, Trade>();
-  stable let drills = Map.empty<Text, Drill>();
-  stable let userProfiles = Map.empty<Principal, UserProfile>();
+  let trades = Map.empty<Text, Trade>();
+  let drills = Map.empty<Text, Drill>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // New Admin Stats Types
   public type UserStats = {
     owner : Principal;
     totalTrades : Nat;
@@ -160,7 +156,10 @@ actor {
     mostActiveTrader : Principal;
   };
 
-  // User Profile Functions
+  public query ({ caller }) func isAdminAssigned() : async Bool {
+    accessControlState.adminAssigned;
+  };
+
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can access profiles");
@@ -182,13 +181,11 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // UUID Generation
   func generateUUID(caller : Principal, timestamp : Int) : Text {
     let ts = Int.abs(timestamp);
     caller.toText() # "_" # ts.toText();
   };
 
-  // Trade Functions
   public shared ({ caller }) func createTrade(input : TradeInput) : async Trade {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create trades");
@@ -460,7 +457,6 @@ actor {
     };
   };
 
-  // Drill Functions
   public shared ({ caller }) func createDrill(input : DrillInput) : async Drill {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create drills");
@@ -562,7 +558,6 @@ actor {
     };
   };
 
-  // ADMIN ONLY functions
   public query ({ caller }) func adminGetPlatformStats() : async PlatformStats {
     if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only admins can access platform stats");
@@ -672,7 +667,6 @@ actor {
     calculateAnalytics(tradesArray, tradesArray.size());
   };
 
-  // Helper Functions
   func calculateAnalytics(trades : [Trade], total : Nat) : Analytics {
     if (total == 0) {
       return {

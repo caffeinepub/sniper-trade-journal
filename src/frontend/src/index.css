@@ -140,7 +140,7 @@
     --popover: 1 0 0;
     --popover-foreground: 0.15 0.02 240;
     --primary: 0.62 0.18 195;
-    --primary-foreground: 0.98 0.005 220;
+    --primary-foreground: 0.1 0.01 240;
     --secondary: 0.93 0.01 220;
     --secondary-foreground: 0.2 0.02 240;
     --muted: 0.94 0.008 220;
@@ -165,7 +165,7 @@
     --sidebar: 0.96 0.007 220;
     --sidebar-foreground: 0.15 0.02 240;
     --sidebar-primary: 0.62 0.18 195;
-    --sidebar-primary-foreground: 0.98 0.005 220;
+    --sidebar-primary-foreground: 0.1 0.01 240;
     --sidebar-accent: 0.91 0.01 220;
     --sidebar-accent-foreground: 0.2 0.02 240;
     --sidebar-border: 0.88 0.01 220;
@@ -260,13 +260,6 @@
   }
   .border-teal {
     border-color: oklch(var(--teal));
-  }
-
-  /* Force white text on teal-background buttons across all themes.
-     Utility is needed because shadcn Button's base styles can override
-     text-white in white/light theme via higher-specificity selectors. */
-  .btn-teal-text {
-    color: #ffffff !important;
   }
 
   /* Gold */

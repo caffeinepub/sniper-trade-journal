@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import {
   BarChart2,
   Brain,
@@ -59,6 +60,7 @@ const STEPS = [
 ];
 
 export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
+  const tealTextClass = useTealButtonTextClass();
   return (
     <div
       data-ocid="signin.page"
@@ -127,10 +129,8 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
               <Button
                 data-ocid="signin.primary_button"
                 size="lg"
-                className="w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98]"
+                className={`w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98] bg-teal hover:bg-teal/90 ${tealTextClass}`}
                 style={{
-                  background: "oklch(var(--teal))",
-                  color: "#ffffff",
                   boxShadow: "0 0 24px oklch(var(--teal) / 0.45)",
                 }}
                 onClick={login}
@@ -239,10 +239,8 @@ export default function SignInPage({ login, isLoggingIn }: SignInPageProps) {
           <Button
             data-ocid="signin.primary_button"
             size="lg"
-            className="w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98]"
+            className={`w-full sm:w-auto sm:px-10 text-base font-semibold h-14 rounded-xl transition-all duration-200 active:scale-[0.98] bg-teal hover:bg-teal/90 ${tealTextClass}`}
             style={{
-              background: "oklch(var(--teal))",
-              color: "#ffffff",
               boxShadow: "0 0 24px oklch(var(--teal) / 0.45)",
             }}
             onClick={login}

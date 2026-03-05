@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useActor } from "@/hooks/useActor";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { cn } from "@/lib/utils";
 import { resolveScreenshotUrl } from "@/utils/screenshot";
 import {
@@ -1123,6 +1124,7 @@ function OverviewView({
   onGoToLeaderboard,
 }: { onGoToLeaderboard: () => void }) {
   const { actor, isFetching: actorFetching } = useActor();
+  const tealTextClass = useTealButtonTextClass();
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(
     null,
   );
@@ -1198,7 +1200,7 @@ function OverviewView({
         <Button
           data-ocid="admin.overview.leaderboard.button"
           size="sm"
-          className="bg-teal hover:bg-teal/90 text-white btn-teal-text gap-2"
+          className={`bg-teal hover:bg-teal/90 ${tealTextClass} gap-2`}
           onClick={onGoToLeaderboard}
         >
           <Trophy className="w-3.5 h-3.5" />

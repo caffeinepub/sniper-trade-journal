@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetDrills } from "@/hooks/useQueries";
+import { useTealButtonTextClass } from "@/hooks/useTealButton";
 import { resolveScreenshotUrl } from "@/utils/screenshot";
 import {
   BookOpen,
@@ -167,6 +168,7 @@ interface MasteryPageProps {
 
 export default function MasteryPage({ onNavigate }: MasteryPageProps) {
   const { data: drillsData, isLoading } = useGetDrills();
+  const tealTextClass = useTealButtonTextClass();
   const drills: Drill[] = useMemo(() => drillsData ?? [], [drillsData]);
 
   const now = new Date();
@@ -279,7 +281,7 @@ export default function MasteryPage({ onNavigate }: MasteryPageProps) {
           <Button
             data-ocid="mastery.dashboard.primary_button"
             size="sm"
-            className="bg-teal hover:bg-teal/90 text-white btn-teal-text font-semibold gap-2 flex-1 sm:flex-none"
+            className={`bg-teal hover:bg-teal/90 ${tealTextClass} font-semibold gap-2 flex-1 sm:flex-none`}
             onClick={() => onNavigate("mastery-new-drill")}
           >
             <Plus className="w-4 h-4" />

@@ -161,6 +161,7 @@ export interface backendInterface {
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    isAdminAssigned(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateDrill(id: string, input: DrillInput): Promise<Drill | null>;

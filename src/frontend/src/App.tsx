@@ -21,6 +21,8 @@ export default function App() {
   const [editTradeId, setEditTradeId] = useState<string | undefined>(undefined);
   const [editDrillId, setEditDrillId] = useState<string | undefined>(undefined);
   const [isAdmin, setIsAdmin] = useState(false);
+  // null = unknown (still loading), false = no admin yet, true = admin exists
+  const [adminAssigned, setAdminAssigned] = useState<boolean | null>(null);
   const { identity, login, isLoggingIn, isInitializing } =
     useInternetIdentity();
   const isAuthenticated = !!identity;
@@ -32,6 +34,13 @@ export default function App() {
       if (!isAuthenticated) setIsAdmin(false);
       return;
     }
+
+    // Check if any admin is already assigned (to hide the Claim Admin button)
+    actor
+      .isAdminAssigned()
+      .then(setAdminAssigned)
+      .catch(() => setAdminAssigned(false));
+
     // Auto-register: calling with empty string registers as a regular user
     // (or no-ops if already registered). This is safe to call every time.
     (
@@ -112,8 +121,12 @@ export default function App() {
   const refreshAdminStatus = async () => {
     if (!actor) return;
     try {
-      const result = await actor.isCallerAdmin();
-      setIsAdmin(result);
+      const [adminResult, assignedResult] = await Promise.all([
+        actor.isCallerAdmin(),
+        actor.isAdminAssigned(),
+      ]);
+      setIsAdmin(adminResult);
+      setAdminAssigned(assignedResult);
     } catch {
       // ignore
     }
@@ -128,6 +141,7 @@ export default function App() {
         isAdmin={isAdmin}
         actor={actor}
         onAdminGranted={refreshAdminStatus}
+        adminAlreadyAssigned={adminAssigned}
       >
         {currentPage === "dashboard" && <DashboardPage />}
         {currentPage === "journal" && (
