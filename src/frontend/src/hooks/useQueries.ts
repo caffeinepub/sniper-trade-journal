@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TradeInput as BackendTradeInput } from "../backend";
-import type { Analytics, Trade, TradeInput } from "../backend.d";
+import type {
+  Analytics,
+  Drill,
+  DrillInput,
+  Trade,
+  TradeInput,
+} from "../backend.d";
 import { useActor } from "./useActor";
 
 // ---- Trades ----
@@ -116,6 +122,75 @@ export function useDeleteTrade() {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
+    },
+  });
+}
+
+// ---- Drills ----
+
+export function useGetDrills() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Drill[]>({
+    queryKey: ["drills"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getDrills();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetDrillById(id: string | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Drill | null>({
+    queryKey: ["drill", id],
+    queryFn: async () => {
+      if (!actor || !id) return null;
+      return actor.getDrillById(id);
+    },
+    enabled: !!actor && !isFetching && !!id,
+  });
+}
+
+export function useCreateDrill() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DrillInput) => {
+      if (!actor) throw new Error("Not authenticated");
+      return actor.createDrill(input as any);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drills"] });
+    },
+  });
+}
+
+export function useUpdateDrill() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: DrillInput }) => {
+      if (!actor) throw new Error("Not authenticated");
+      return actor.updateDrill(id, input as any);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["drills"] });
+      queryClient.invalidateQueries({ queryKey: ["drill", vars.id] });
+    },
+  });
+}
+
+export function useDeleteDrill() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!actor) throw new Error("Not authenticated");
+      return actor.deleteDrill(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drills"] });
     },
   });
 }

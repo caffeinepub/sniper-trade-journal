@@ -25,6 +25,34 @@ export const UserRole = IDL.Variant({
   'guest' : IDL.Null,
 });
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
+export const DrillInput = IDL.Record({
+  'marketShiftObservations' : IDL.Text,
+  'liquidityObservations' : IDL.Text,
+  'timeframe' : IDL.Text,
+  'entryAnalysis' : IDL.Text,
+  'date' : IDL.Text,
+  'structureNotes' : IDL.Text,
+  'drillType' : IDL.Text,
+  'induceNotes' : IDL.Text,
+  'screenshot' : IDL.Opt(ExternalBlob),
+  'symbol' : IDL.Text,
+});
+export const Drill = IDL.Record({
+  'id' : IDL.Text,
+  'marketShiftObservations' : IDL.Text,
+  'liquidityObservations' : IDL.Text,
+  'timeframe' : IDL.Text,
+  'entryAnalysis' : IDL.Text,
+  'owner' : IDL.Principal,
+  'date' : IDL.Text,
+  'createdAt' : IDL.Int,
+  'structureNotes' : IDL.Text,
+  'drillType' : IDL.Text,
+  'updatedAt' : IDL.Int,
+  'induceNotes' : IDL.Text,
+  'screenshot' : IDL.Opt(ExternalBlob),
+  'symbol' : IDL.Text,
+});
 export const TradeInput = IDL.Record({
   'result' : IDL.Text,
   'direction' : IDL.Text,
@@ -131,11 +159,15 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'createDrill' : IDL.Func([DrillInput], [Drill], []),
   'createTrade' : IDL.Func([TradeInput], [Trade], []),
+  'deleteDrill' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'deleteTrade' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'getAnalytics' : IDL.Func([], [Analytics], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getDrillById' : IDL.Func([IDL.Text], [IDL.Opt(Drill)], ['query']),
+  'getDrills' : IDL.Func([], [IDL.Vec(Drill)], ['query']),
   'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
   'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
   'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
@@ -146,6 +178,7 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'updateDrill' : IDL.Func([IDL.Text, DrillInput], [IDL.Opt(Drill)], []),
   'updateTrade' : IDL.Func([IDL.Text, TradeInput], [IDL.Opt(Trade)], []),
 });
 
@@ -169,6 +202,34 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const ExternalBlob = IDL.Vec(IDL.Nat8);
+  const DrillInput = IDL.Record({
+    'marketShiftObservations' : IDL.Text,
+    'liquidityObservations' : IDL.Text,
+    'timeframe' : IDL.Text,
+    'entryAnalysis' : IDL.Text,
+    'date' : IDL.Text,
+    'structureNotes' : IDL.Text,
+    'drillType' : IDL.Text,
+    'induceNotes' : IDL.Text,
+    'screenshot' : IDL.Opt(ExternalBlob),
+    'symbol' : IDL.Text,
+  });
+  const Drill = IDL.Record({
+    'id' : IDL.Text,
+    'marketShiftObservations' : IDL.Text,
+    'liquidityObservations' : IDL.Text,
+    'timeframe' : IDL.Text,
+    'entryAnalysis' : IDL.Text,
+    'owner' : IDL.Principal,
+    'date' : IDL.Text,
+    'createdAt' : IDL.Int,
+    'structureNotes' : IDL.Text,
+    'drillType' : IDL.Text,
+    'updatedAt' : IDL.Int,
+    'induceNotes' : IDL.Text,
+    'screenshot' : IDL.Opt(ExternalBlob),
+    'symbol' : IDL.Text,
+  });
   const TradeInput = IDL.Record({
     'result' : IDL.Text,
     'direction' : IDL.Text,
@@ -275,11 +336,15 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'createDrill' : IDL.Func([DrillInput], [Drill], []),
     'createTrade' : IDL.Func([TradeInput], [Trade], []),
+    'deleteDrill' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'deleteTrade' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'getAnalytics' : IDL.Func([], [Analytics], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getDrillById' : IDL.Func([IDL.Text], [IDL.Opt(Drill)], ['query']),
+    'getDrills' : IDL.Func([], [IDL.Vec(Drill)], ['query']),
     'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
     'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
     'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
@@ -290,6 +355,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'updateDrill' : IDL.Func([IDL.Text, DrillInput], [IDL.Opt(Drill)], []),
     'updateTrade' : IDL.Func([IDL.Text, TradeInput], [IDL.Opt(Trade)], []),
   });
 };

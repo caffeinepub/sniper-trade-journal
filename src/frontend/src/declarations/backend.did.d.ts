@@ -25,6 +25,34 @@ export interface Analytics {
   'followedRulesPercent' : number,
   'profitFactor' : number,
 }
+export interface Drill {
+  'id' : string,
+  'marketShiftObservations' : string,
+  'liquidityObservations' : string,
+  'timeframe' : string,
+  'entryAnalysis' : string,
+  'owner' : Principal,
+  'date' : string,
+  'createdAt' : bigint,
+  'structureNotes' : string,
+  'drillType' : string,
+  'updatedAt' : bigint,
+  'induceNotes' : string,
+  'screenshot' : [] | [ExternalBlob],
+  'symbol' : string,
+}
+export interface DrillInput {
+  'marketShiftObservations' : string,
+  'liquidityObservations' : string,
+  'timeframe' : string,
+  'entryAnalysis' : string,
+  'date' : string,
+  'structureNotes' : string,
+  'drillType' : string,
+  'induceNotes' : string,
+  'screenshot' : [] | [ExternalBlob],
+  'symbol' : string,
+}
 export type ExternalBlob = Uint8Array;
 export interface Trade {
   'id' : string,
@@ -119,17 +147,22 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'createDrill' : ActorMethod<[DrillInput], Drill>,
   'createTrade' : ActorMethod<[TradeInput], Trade>,
+  'deleteDrill' : ActorMethod<[string], boolean>,
   'deleteTrade' : ActorMethod<[string], boolean>,
   'getAnalytics' : ActorMethod<[], Analytics>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getDrillById' : ActorMethod<[string], [] | [Drill]>,
+  'getDrills' : ActorMethod<[], Array<Drill>>,
   'getTradeById' : ActorMethod<[string], [] | [Trade]>,
   'getTrades' : ActorMethod<[], Array<Trade>>,
   'getUniqueTags' : ActorMethod<[], Array<string>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'updateDrill' : ActorMethod<[string, DrillInput], [] | [Drill]>,
   'updateTrade' : ActorMethod<[string, TradeInput], [] | [Trade]>,
 }
 export declare const idlService: IDL.ServiceClass;

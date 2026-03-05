@@ -1,4 +1,3 @@
-import Migration "migration";
 import Map "mo:core/Map";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
@@ -14,7 +13,7 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 
-(with migration = Migration.run)
+
 actor {
   include MixinStorage();
 
@@ -85,6 +84,36 @@ actor {
     screenshot : ?Storage.ExternalBlob;
   };
 
+  type Drill = {
+    id : Text;
+    owner : Principal;
+    date : Text;
+    symbol : Text;
+    timeframe : Text;
+    drillType : Text;
+    structureNotes : Text;
+    liquidityObservations : Text;
+    induceNotes : Text;
+    marketShiftObservations : Text;
+    entryAnalysis : Text;
+    screenshot : ?Storage.ExternalBlob;
+    createdAt : Int;
+    updatedAt : Int;
+  };
+
+  type DrillInput = {
+    date : Text;
+    symbol : Text;
+    timeframe : Text;
+    drillType : Text;
+    structureNotes : Text;
+    liquidityObservations : Text;
+    induceNotes : Text;
+    marketShiftObservations : Text;
+    entryAnalysis : Text;
+    screenshot : ?Storage.ExternalBlob;
+  };
+
   type Analytics = {
     totalTrades : Nat;
     wins : Nat;
@@ -107,6 +136,7 @@ actor {
 
   // Persistent storage MUST use stable let
   stable let trades = Map.empty<Text, Trade>();
+  stable let drills = Map.empty<Text, Drill>();
   stable let userProfiles = Map.empty<Principal, UserProfile>();
 
   // User Profile Functions
@@ -406,6 +436,108 @@ actor {
       followedRulesPercent;
       exitedEarlyPercent;
       movedStopLossPercent;
+    };
+  };
+
+  // Drill Functions
+  public shared ({ caller }) func createDrill(input : DrillInput) : async Drill {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create drills");
+    };
+
+    let ts = Time.now();
+    let uuid = generateUUID(caller, ts);
+    let drill : Drill = {
+      id = uuid;
+      owner = caller;
+      date = input.date;
+      symbol = input.symbol;
+      timeframe = input.timeframe;
+      drillType = input.drillType;
+      structureNotes = input.structureNotes;
+      liquidityObservations = input.liquidityObservations;
+      induceNotes = input.induceNotes;
+      marketShiftObservations = input.marketShiftObservations;
+      entryAnalysis = input.entryAnalysis;
+      screenshot = input.screenshot;
+      createdAt = ts;
+      updatedAt = ts;
+    };
+    drills.add(uuid, drill);
+    drill;
+  };
+
+  public shared ({ caller }) func updateDrill(id : Text, input : DrillInput) : async ?Drill {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update drills");
+    };
+
+    switch (drills.get(id)) {
+      case (null) { null };
+      case (?existingDrill) {
+        if (not Principal.equal(caller, existingDrill.owner)) {
+          Runtime.trap("Unauthorized: Can only update your own drills");
+        };
+
+        let updatedDrill : Drill = {
+          existingDrill with
+          date = input.date;
+          symbol = input.symbol;
+          timeframe = input.timeframe;
+          drillType = input.drillType;
+          structureNotes = input.structureNotes;
+          liquidityObservations = input.liquidityObservations;
+          induceNotes = input.induceNotes;
+          marketShiftObservations = input.marketShiftObservations;
+          entryAnalysis = input.entryAnalysis;
+          screenshot = input.screenshot;
+          updatedAt = Time.now();
+        };
+        drills.add(id, updatedDrill);
+        ?updatedDrill;
+      };
+    };
+  };
+
+  public shared ({ caller }) func deleteDrill(id : Text) : async Bool {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete drills");
+    };
+
+    switch (drills.get(id)) {
+      case (null) { false };
+      case (?drill) {
+        if (not Principal.equal(drill.owner, caller)) {
+          Runtime.trap("Unauthorized: Can only delete your own drills");
+        };
+        drills.remove(id);
+        true;
+      };
+    };
+  };
+
+  public query ({ caller }) func getDrills() : async [Drill] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view drills");
+    };
+
+    drills.values().toArray().filter(
+      func(d) {
+        Principal.equal(caller, d.owner);
+      }
+    );
+  };
+
+  public query ({ caller }) func getDrillById(id : Text) : async ?Drill {
+    switch (drills.get(id)) {
+      case (null) { null };
+      case (?drill) {
+        if (Principal.equal(caller, drill.owner) or AccessControl.isAdmin(accessControlState, caller)) {
+          ?drill;
+        } else {
+          Runtime.trap("Unauthorized: Cannot view this drill");
+        };
+      };
     };
   };
 };

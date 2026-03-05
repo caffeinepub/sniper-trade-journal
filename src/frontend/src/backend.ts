@@ -89,6 +89,34 @@ export class ExternalBlob {
         return this;
     }
 }
+export interface Drill {
+    id: string;
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    owner: Principal;
+    date: string;
+    createdAt: bigint;
+    structureNotes: string;
+    drillType: string;
+    updatedAt: bigint;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
+export interface DrillInput {
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
 export interface Analytics {
     totalTrades: bigint;
     avgRR: number;
@@ -192,20 +220,25 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    createDrill(input: DrillInput): Promise<Drill>;
     createTrade(input: TradeInput): Promise<Trade>;
+    deleteDrill(id: string): Promise<boolean>;
     deleteTrade(id: string): Promise<boolean>;
     getAnalytics(): Promise<Analytics>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getDrillById(id: string): Promise<Drill | null>;
+    getDrills(): Promise<Array<Drill>>;
     getTradeById(id: string): Promise<Trade | null>;
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    updateDrill(id: string, input: DrillInput): Promise<Drill | null>;
     updateTrade(id: string, input: TradeInput): Promise<Trade | null>;
 }
-import type { ExternalBlob as _ExternalBlob, Trade as _Trade, TradeInput as _TradeInput, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { Drill as _Drill, DrillInput as _DrillInput, ExternalBlob as _ExternalBlob, Trade as _Trade, TradeInput as _TradeInput, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -320,18 +353,46 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async createTrade(arg0: TradeInput): Promise<Trade> {
+    async createDrill(arg0: DrillInput): Promise<Drill> {
         if (this.processError) {
             try {
-                const result = await this.actor.createTrade(await to_candid_TradeInput_n10(this._uploadFile, this._downloadFile, arg0));
-                return from_candid_Trade_n13(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.createDrill(await to_candid_DrillInput_n10(this._uploadFile, this._downloadFile, arg0));
+                return from_candid_Drill_n13(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createTrade(await to_candid_TradeInput_n10(this._uploadFile, this._downloadFile, arg0));
-            return from_candid_Trade_n13(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.createDrill(await to_candid_DrillInput_n10(this._uploadFile, this._downloadFile, arg0));
+            return from_candid_Drill_n13(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async createTrade(arg0: TradeInput): Promise<Trade> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createTrade(await to_candid_TradeInput_n17(this._uploadFile, this._downloadFile, arg0));
+                return from_candid_Trade_n19(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createTrade(await to_candid_TradeInput_n17(this._uploadFile, this._downloadFile, arg0));
+            return from_candid_Trade_n19(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async deleteDrill(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteDrill(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteDrill(arg0);
+            return result;
         }
     }
     async deleteTrade(arg0: string): Promise<boolean> {
@@ -366,56 +427,84 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.getCallerUserProfile();
-                return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getCallerUserProfile();
-            return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
         }
     }
     async getCallerUserRole(): Promise<UserRole> {
         if (this.processError) {
             try {
                 const result = await this.actor.getCallerUserRole();
-                return from_candid_UserRole_n18(this._uploadFile, this._downloadFile, result);
+                return from_candid_UserRole_n22(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getCallerUserRole();
-            return from_candid_UserRole_n18(this._uploadFile, this._downloadFile, result);
+            return from_candid_UserRole_n22(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getDrillById(arg0: string): Promise<Drill | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDrillById(arg0);
+                return from_candid_opt_n24(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDrillById(arg0);
+            return from_candid_opt_n24(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getDrills(): Promise<Array<Drill>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDrills();
+                return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDrills();
+            return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
         }
     }
     async getTradeById(arg0: string): Promise<Trade | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getTradeById(arg0);
-                return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n26(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getTradeById(arg0);
-            return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n26(this._uploadFile, this._downloadFile, result);
         }
     }
     async getTrades(): Promise<Array<Trade>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getTrades();
-                return from_candid_vec_n21(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n27(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getTrades();
-            return from_candid_vec_n21(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n27(this._uploadFile, this._downloadFile, result);
         }
     }
     async getUniqueTags(): Promise<Array<string>> {
@@ -436,14 +525,14 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.getUserProfile(arg0);
-                return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getUserProfile(arg0);
-            return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
         }
     }
     async isCallerAdmin(): Promise<boolean> {
@@ -474,29 +563,46 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateTrade(arg0: string, arg1: TradeInput): Promise<Trade | null> {
+    async updateDrill(arg0: string, arg1: DrillInput): Promise<Drill | null> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateTrade(arg0, await to_candid_TradeInput_n10(this._uploadFile, this._downloadFile, arg1));
-                return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.updateDrill(arg0, await to_candid_DrillInput_n10(this._uploadFile, this._downloadFile, arg1));
+                return from_candid_opt_n24(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateTrade(arg0, await to_candid_TradeInput_n10(this._uploadFile, this._downloadFile, arg1));
-            return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.updateDrill(arg0, await to_candid_DrillInput_n10(this._uploadFile, this._downloadFile, arg1));
+            return from_candid_opt_n24(this._uploadFile, this._downloadFile, result);
         }
     }
+    async updateTrade(arg0: string, arg1: TradeInput): Promise<Trade | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateTrade(arg0, await to_candid_TradeInput_n17(this._uploadFile, this._downloadFile, arg1));
+                return from_candid_opt_n26(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateTrade(arg0, await to_candid_TradeInput_n17(this._uploadFile, this._downloadFile, arg1));
+            return from_candid_opt_n26(this._uploadFile, this._downloadFile, result);
+        }
+    }
+}
+async function from_candid_Drill_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Drill): Promise<Drill> {
+    return await from_candid_record_n14(_uploadFile, _downloadFile, value);
 }
 async function from_candid_ExternalBlob_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ExternalBlob): Promise<ExternalBlob> {
     return await _downloadFile(value);
 }
-async function from_candid_Trade_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Trade): Promise<Trade> {
-    return await from_candid_record_n14(_uploadFile, _downloadFile, value);
+async function from_candid_Trade_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Trade): Promise<Trade> {
+    return await from_candid_record_n20(_uploadFile, _downloadFile, value);
 }
-function from_candid_UserRole_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
-    return from_candid_variant_n19(_uploadFile, _downloadFile, value);
+function from_candid_UserRole_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
+    return from_candid_variant_n23(_uploadFile, _downloadFile, value);
 }
 function from_candid__CaffeineStorageRefillResult_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: __CaffeineStorageRefillResult): _CaffeineStorageRefillResult {
     return from_candid_record_n5(_uploadFile, _downloadFile, value);
@@ -504,11 +610,14 @@ function from_candid__CaffeineStorageRefillResult_n4(_uploadFile: (file: Externa
 async function from_candid_opt_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_ExternalBlob]): Promise<ExternalBlob | null> {
     return value.length === 0 ? null : await from_candid_ExternalBlob_n16(_uploadFile, _downloadFile, value[0]);
 }
-function from_candid_opt_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
+function from_candid_opt_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
     return value.length === 0 ? null : value[0];
 }
-async function from_candid_opt_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Trade]): Promise<Trade | null> {
-    return value.length === 0 ? null : await from_candid_Trade_n13(_uploadFile, _downloadFile, value[0]);
+async function from_candid_opt_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Drill]): Promise<Drill | null> {
+    return value.length === 0 ? null : await from_candid_Drill_n13(_uploadFile, _downloadFile, value[0]);
+}
+async function from_candid_opt_n26(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Trade]): Promise<Trade | null> {
+    return value.length === 0 ? null : await from_candid_Trade_n19(_uploadFile, _downloadFile, value[0]);
 }
 function from_candid_opt_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [boolean]): boolean | null {
     return value.length === 0 ? null : value[0];
@@ -517,6 +626,54 @@ function from_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Ar
     return value.length === 0 ? null : value[0];
 }
 async function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    id: string;
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    owner: Principal;
+    date: string;
+    createdAt: bigint;
+    structureNotes: string;
+    drillType: string;
+    updatedAt: bigint;
+    induceNotes: string;
+    screenshot: [] | [_ExternalBlob];
+    symbol: string;
+}): Promise<{
+    id: string;
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    owner: Principal;
+    date: string;
+    createdAt: bigint;
+    structureNotes: string;
+    drillType: string;
+    updatedAt: bigint;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}> {
+    return {
+        id: value.id,
+        marketShiftObservations: value.marketShiftObservations,
+        liquidityObservations: value.liquidityObservations,
+        timeframe: value.timeframe,
+        entryAnalysis: value.entryAnalysis,
+        owner: value.owner,
+        date: value.date,
+        createdAt: value.createdAt,
+        structureNotes: value.structureNotes,
+        drillType: value.drillType,
+        updatedAt: value.updatedAt,
+        induceNotes: value.induceNotes,
+        screenshot: record_opt_to_undefined(await from_candid_opt_n15(_uploadFile, _downloadFile, value.screenshot)),
+        symbol: value.symbol
+    };
+}
+async function from_candid_record_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: string;
     result: string;
     direction: string;
@@ -624,7 +781,7 @@ function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint
         topped_up_amount: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.topped_up_amount))
     };
 }
-function from_candid_variant_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     admin: null;
 } | {
     user: null;
@@ -633,14 +790,20 @@ function from_candid_variant_n19(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): UserRole {
     return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
 }
-async function from_candid_vec_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Trade>): Promise<Array<Trade>> {
-    return await Promise.all(value.map(async (x)=>await from_candid_Trade_n13(_uploadFile, _downloadFile, x)));
+async function from_candid_vec_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Drill>): Promise<Array<Drill>> {
+    return await Promise.all(value.map(async (x)=>await from_candid_Drill_n13(_uploadFile, _downloadFile, x)));
+}
+async function from_candid_vec_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Trade>): Promise<Array<Trade>> {
+    return await Promise.all(value.map(async (x)=>await from_candid_Trade_n19(_uploadFile, _downloadFile, x)));
+}
+async function to_candid_DrillInput_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: DrillInput): Promise<_DrillInput> {
+    return await to_candid_record_n11(_uploadFile, _downloadFile, value);
 }
 async function to_candid_ExternalBlob_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: ExternalBlob): Promise<_ExternalBlob> {
     return await _uploadFile(value);
 }
-async function to_candid_TradeInput_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: TradeInput): Promise<_TradeInput> {
-    return await to_candid_record_n11(_uploadFile, _downloadFile, value);
+async function to_candid_TradeInput_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: TradeInput): Promise<_TradeInput> {
+    return await to_candid_record_n18(_uploadFile, _downloadFile, value);
 }
 function to_candid_UserRole_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {
     return to_candid_variant_n9(_uploadFile, _downloadFile, value);
@@ -652,6 +815,42 @@ function to_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Arra
     return value === null ? candid_none() : candid_some(to_candid__CaffeineStorageRefillInformation_n2(_uploadFile, _downloadFile, value));
 }
 async function to_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}): Promise<{
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot: [] | [_ExternalBlob];
+    symbol: string;
+}> {
+    return {
+        marketShiftObservations: value.marketShiftObservations,
+        liquidityObservations: value.liquidityObservations,
+        timeframe: value.timeframe,
+        entryAnalysis: value.entryAnalysis,
+        date: value.date,
+        structureNotes: value.structureNotes,
+        drillType: value.drillType,
+        induceNotes: value.induceNotes,
+        screenshot: value.screenshot ? candid_some(await to_candid_ExternalBlob_n12(_uploadFile, _downloadFile, value.screenshot)) : candid_none(),
+        symbol: value.symbol
+    };
+}
+async function to_candid_record_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     result: string;
     direction: string;
     timeframe: string;

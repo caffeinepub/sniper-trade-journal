@@ -3,7 +3,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import CalendarPage from "@/pages/CalendarPage";
 import DashboardPage from "@/pages/DashboardPage";
+import DrillJournalPage from "@/pages/DrillJournalPage";
 import JournalPage from "@/pages/JournalPage";
+import MasteryPage from "@/pages/MasteryPage";
+import NewDrillPage from "@/pages/NewDrillPage";
 import ReviewPage from "@/pages/ReviewPage";
 import SignInPage from "@/pages/SignInPage";
 import TradeFormPage from "@/pages/TradeFormPage";
@@ -13,16 +16,22 @@ import { useState } from "react";
 export default function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
   const [editTradeId, setEditTradeId] = useState<string | undefined>(undefined);
+  const [editDrillId, setEditDrillId] = useState<string | undefined>(undefined);
   const { identity, login, isLoggingIn, isInitializing } =
     useInternetIdentity();
   const isAuthenticated = !!identity;
 
-  const handleNavigate = (page: AppPage, tradeId?: string) => {
+  const handleNavigate = (page: AppPage, id?: string) => {
     setCurrentPage(page);
     if (page === "new-trade") {
-      setEditTradeId(tradeId);
+      setEditTradeId(id);
+      setEditDrillId(undefined);
+    } else if (page === "mastery-new-drill") {
+      setEditDrillId(id);
+      setEditTradeId(undefined);
     } else {
       setEditTradeId(undefined);
+      setEditDrillId(undefined);
     }
   };
 
@@ -67,6 +76,13 @@ export default function App() {
       )}
       {currentPage === "calendar" && <CalendarPage />}
       {currentPage === "review" && <ReviewPage />}
+      {currentPage === "mastery" && <MasteryPage onNavigate={handleNavigate} />}
+      {currentPage === "mastery-new-drill" && (
+        <NewDrillPage editDrillId={editDrillId} onNavigate={handleNavigate} />
+      )}
+      {currentPage === "mastery-journal" && (
+        <DrillJournalPage onNavigate={handleNavigate} />
+      )}
 
       <Toaster
         theme="dark"

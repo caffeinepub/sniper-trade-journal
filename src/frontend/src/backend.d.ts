@@ -14,6 +14,34 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export interface Drill {
+    id: string;
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    owner: Principal;
+    date: string;
+    createdAt: bigint;
+    structureNotes: string;
+    drillType: string;
+    updatedAt: bigint;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
+export interface DrillInput {
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
 export interface Analytics {
     totalTrades: bigint;
     avgRR: number;
@@ -99,16 +127,21 @@ export enum UserRole {
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    createDrill(input: DrillInput): Promise<Drill>;
     createTrade(input: TradeInput): Promise<Trade>;
+    deleteDrill(id: string): Promise<boolean>;
     deleteTrade(id: string): Promise<boolean>;
     getAnalytics(): Promise<Analytics>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getDrillById(id: string): Promise<Drill | null>;
+    getDrills(): Promise<Array<Drill>>;
     getTradeById(id: string): Promise<Trade | null>;
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    updateDrill(id: string, input: DrillInput): Promise<Drill | null>;
     updateTrade(id: string, input: TradeInput): Promise<Trade | null>;
 }

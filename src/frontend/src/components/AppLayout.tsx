@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  Swords,
   Target,
   X,
 } from "lucide-react";
@@ -21,13 +22,17 @@ export type AppPage =
   | "journal"
   | "new-trade"
   | "calendar"
-  | "review";
+  | "review"
+  | "mastery"
+  | "mastery-new-drill"
+  | "mastery-journal";
 
 interface NavItem {
   id: AppPage;
   label: string;
   icon: React.FC<{ className?: string }>;
   ocid: string;
+  activeFor?: AppPage[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -56,11 +61,18 @@ const NAV_ITEMS: NavItem[] = [
     icon: Brain,
     ocid: "nav.review.link",
   },
+  {
+    id: "mastery",
+    label: "Mastery",
+    icon: Swords,
+    ocid: "nav.mastery.link",
+    activeFor: ["mastery", "mastery-new-drill", "mastery-journal"],
+  },
 ];
 
 interface AppLayoutProps {
   currentPage: AppPage;
-  onNavigate: (page: AppPage) => void;
+  onNavigate: (page: AppPage, id?: string) => void;
   children: React.ReactNode;
 }
 
@@ -100,7 +112,9 @@ export default function AppLayout({
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const active = currentPage === item.id;
+            const active = item.activeFor
+              ? item.activeFor.includes(currentPage)
+              : currentPage === item.id;
             return (
               <button
                 type="button"
@@ -209,7 +223,9 @@ export default function AppLayout({
             <nav className="flex-1 px-3 py-4 space-y-1">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
-                const active = currentPage === item.id;
+                const active = item.activeFor
+                  ? item.activeFor.includes(currentPage)
+                  : currentPage === item.id;
                 return (
                   <button
                     type="button"
