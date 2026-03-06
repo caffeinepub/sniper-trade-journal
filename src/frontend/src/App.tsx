@@ -11,6 +11,7 @@ import JournalPage from "@/pages/JournalPage";
 import MasteryPage from "@/pages/MasteryPage";
 import NewDrillPage from "@/pages/NewDrillPage";
 import ReviewPage from "@/pages/ReviewPage";
+import RiskCalculatorPage from "@/pages/RiskCalculatorPage";
 import SignInPage from "@/pages/SignInPage";
 import TradeFormPage from "@/pages/TradeFormPage";
 import { Loader2 } from "lucide-react";
@@ -35,29 +36,39 @@ export default function App() {
       return;
     }
 
-    // Check if any admin is already assigned (to hide the Claim Admin button)
+    // Check if any admin is already assigned (to control Claim Admin button visibility)
     actor
       .isAdminAssigned()
-      .then(setAdminAssigned)
-      .catch(() => setAdminAssigned(false));
+      .then(async (assigned) => {
+        setAdminAssigned(assigned);
 
-    // Auto-register: calling with empty string registers as a regular user
-    // (or no-ops if already registered). This is safe to call every time.
-    (
-      actor as unknown as {
-        _initializeAccessControlWithSecret: (t: string) => Promise<void>;
-      }
-    )
-      ._initializeAccessControlWithSecret("")
-      .catch(() => {
-        // ignore registration errors — user may already be registered
-      })
-      .finally(() => {
-        // After registration attempt, check actual admin status
+        if (assigned) {
+          // Admin already exists — safe to auto-register as a regular user.
+          // This is a no-op if the caller is already registered.
+          try {
+            await (
+              actor as unknown as {
+                _initializeAccessControlWithSecret: (
+                  t: string,
+                ) => Promise<void>;
+              }
+            )._initializeAccessControlWithSecret("");
+          } catch {
+            // ignore — already registered
+          }
+        }
+        // If admin not yet assigned, do NOT auto-register — the owner must
+        // explicitly click "Claim Admin" so they become admin, not a user.
+
+        // Always refresh admin status after the above
         actor
           .isCallerAdmin()
           .then(setIsAdmin)
           .catch(() => setIsAdmin(false));
+      })
+      .catch(() => {
+        setAdminAssigned(false);
+        setIsAdmin(false);
       });
   }, [isAuthenticated, actor, actorFetching]);
 
@@ -165,6 +176,7 @@ export default function App() {
           <DrillJournalPage onNavigate={handleNavigate} />
         )}
         {currentPage === "admin" && isAdmin && <AdminPage />}
+        {currentPage === "risk-calculator" && <RiskCalculatorPage />}
 
         <Toaster
           theme="dark"

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   BookOpen,
   Brain,
+  Calculator,
   Calendar,
   ChevronRight,
   LayoutDashboard,
@@ -32,7 +33,8 @@ export type AppPage =
   | "mastery"
   | "mastery-new-drill"
   | "mastery-journal"
-  | "admin";
+  | "admin"
+  | "risk-calculator";
 
 interface NavItem {
   id: AppPage;
@@ -75,6 +77,12 @@ const NAV_ITEMS: NavItem[] = [
     ocid: "nav.mastery.link",
     activeFor: ["mastery", "mastery-new-drill", "mastery-journal"],
   },
+  {
+    id: "risk-calculator",
+    label: "Risk Calculator",
+    icon: Calculator,
+    ocid: "nav.risk_calculator.link",
+  },
 ];
 
 interface AppLayoutProps {
@@ -115,6 +123,8 @@ function ClaimAdminSection({
     setLoading(true);
     setStatus("idle");
     try {
+      // Pass empty string — backend no longer requires a token.
+      // First authenticated caller always wins admin.
       await (
         actor as unknown as {
           _initializeAccessControlWithSecret: (t: string) => Promise<void>;
@@ -134,8 +144,8 @@ function ClaimAdminSection({
     }
   };
 
-  // Hide entirely if admin is already assigned by another user
-  if (adminAlreadyAssigned) return null;
+  // Hide if admin already exists or status unknown (still loading)
+  if (adminAlreadyAssigned !== false) return null;
 
   if (status === "success") {
     return (
@@ -148,35 +158,35 @@ function ClaimAdminSection({
     );
   }
 
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] text-muted-foreground leading-relaxed px-1">
-        First login? Tap below to claim permanent admin access.
-      </p>
-      <Button
-        type="button"
-        size="sm"
-        disabled={loading}
-        onClick={handleClaim}
-        className="w-full h-7 text-[11px] bg-amber-500 hover:bg-amber-500/90 text-white font-semibold"
-        data-ocid="admin.claim.button"
-      >
-        {loading ? (
-          <Loader2 className="w-3 h-3 animate-spin mr-1" />
-        ) : (
-          <Shield className="w-3 h-3 mr-1" />
-        )}
-        {loading ? "Claiming…" : "Claim Admin"}
-      </Button>
-      {status === "error" && (
+  if (status === "error") {
+    return (
+      <div className="space-y-1.5">
         <p
           className="text-[10px] text-red-400 px-1"
           data-ocid="admin.claim.error_state"
         >
-          Could not claim admin. Please try again.
+          Admin was already claimed by another account.
         </p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={loading}
+      onClick={handleClaim}
+      className="w-full h-7 text-[11px] bg-amber-500 hover:bg-amber-500/90 text-white font-semibold"
+      data-ocid="admin.claim.button"
+    >
+      {loading ? (
+        <Loader2 className="w-3 h-3 animate-spin mr-1" />
+      ) : (
+        <Shield className="w-3 h-3 mr-1" />
       )}
-    </div>
+      {loading ? "Claiming…" : "Claim Admin (First Time Only)"}
+    </Button>
   );
 }
 
