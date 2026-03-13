@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -24,10 +26,13 @@ import {
   Archive,
   Building2,
   Loader2,
+  Minus,
   Plus,
   RefreshCw,
   Search,
   Trash2,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -45,9 +50,32 @@ const INSTITUTIONS = [
   "Bank of America",
   "European Central Bank",
   "Federal Reserve",
+  "Bank of England",
+  "Bank of Japan",
+  "International Monetary Fund",
+  "World Bank",
 ];
 
-const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CHF", "NZD"];
+const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CHF", "NZD", "CAD"];
+const COMMODITIES = ["Gold", "Oil", "Silver"];
+const CRYPTO = ["Bitcoin", "Ethereum", "Solana"];
+
+// Category helpers
+function getMarketCategory(
+  market: string,
+): "currency" | "commodity" | "crypto" | "macro" {
+  if (CURRENCIES.includes(market)) return "currency";
+  if (COMMODITIES.includes(market)) return "commodity";
+  if (CRYPTO.includes(market)) return "crypto";
+  return "macro";
+}
+
+const MARKET_TAG_STYLES: Record<string, string> = {
+  currency: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  commodity: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  crypto: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  macro: "bg-muted text-muted-foreground border-border",
+};
 
 const INSTITUTION_COLORS: Record<string, string> = {
   "Goldman Sachs": "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -58,6 +86,11 @@ const INSTITUTION_COLORS: Record<string, string> = {
   "European Central Bank":
     "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
   "Federal Reserve": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  "Bank of England": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+  "Bank of Japan": "bg-pink-500/15 text-pink-400 border-pink-500/30",
+  "International Monetary Fund":
+    "bg-teal-500/15 text-teal-400 border-teal-500/30",
+  "World Bank": "bg-lime-500/15 text-lime-400 border-lime-500/30",
 };
 
 const SENTIMENT_STYLES: Record<string, string> = {
@@ -71,9 +104,10 @@ const ARCHIVE_THRESHOLD_DAYS = 30;
 function isArchived(dateStr: string): boolean {
   const date = new Date(dateStr);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  return diffMs > ARCHIVE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+  return now.getTime() - date.getTime() > ARCHIVE_THRESHOLD_DAYS * 86400000;
 }
+
+type TabType = "all" | "currencies" | "commodities" | "crypto" | "archive";
 
 function NewsCardSkeleton() {
   return (
@@ -92,6 +126,86 @@ function NewsCardSkeleton() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function SentimentIcon({ sentiment }: { sentiment: string }) {
+  if (sentiment === "Bullish") return <TrendingUp className="h-3.5 w-3.5" />;
+  if (sentiment === "Bearish") return <TrendingDown className="h-3.5 w-3.5" />;
+  return <Minus className="h-3.5 w-3.5" />;
+}
+
+function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
+  // Compute dominant sentiment per major asset from recent 60 days
+  const recentCutoff = Date.now() - 60 * 86400000;
+  const recent = news.filter((n) => new Date(n.date).getTime() > recentCutoff);
+
+  const assets = [
+    { label: "USD", key: "USD" },
+    { label: "EUR", key: "EUR" },
+    { label: "GBP", key: "GBP" },
+    { label: "JPY", key: "JPY" },
+    { label: "Gold", key: "Gold" },
+    { label: "Oil", key: "Oil" },
+    { label: "Bitcoin", key: "Bitcoin" },
+    { label: "Ethereum", key: "Ethereum" },
+  ];
+
+  const sentimentMap: Record<string, Record<string, number>> = {};
+  for (const item of recent) {
+    const mkt = item.currency;
+    if (!sentimentMap[mkt])
+      sentimentMap[mkt] = { Bullish: 0, Bearish: 0, Neutral: 0 };
+    sentimentMap[mkt][item.sentiment] =
+      (sentimentMap[mkt][item.sentiment] ?? 0) + 1;
+  }
+
+  const getDominant = (key: string): string => {
+    const counts = sentimentMap[key];
+    if (!counts) return "Neutral";
+    return (
+      Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Neutral"
+    );
+  };
+
+  return (
+    <div
+      className="bg-card border border-border rounded-xl p-4"
+      data-ocid="institutional.sentiment_strip.panel"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Building2 className="h-4 w-4 text-teal" />
+        <span className="text-sm font-semibold text-foreground">
+          Institutional Sentiment Engine
+        </span>
+        <span className="text-xs text-muted-foreground ml-1">
+          — aggregated from recent reports
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {assets.map(({ label, key }) => {
+          const dom = getDominant(key);
+          const cat = getMarketCategory(key);
+          const sentStyle = SENTIMENT_STYLES[dom] ?? SENTIMENT_STYLES.Neutral;
+          const catStyle = MARKET_TAG_STYLES[cat];
+          return (
+            <div
+              key={key}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${catStyle}`}
+            >
+              <span>{label}</span>
+              <span className="text-muted-foreground">→</span>
+              <span
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 border text-xs font-semibold ${sentStyle}`}
+              >
+                <SentimentIcon sentiment={dom} />
+                {dom}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -151,7 +265,7 @@ function AddNewsModal({
       >
         <DialogHeader>
           <DialogTitle className="text-foreground">
-            Add Institutional News
+            Add Institutional Report
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
@@ -168,11 +282,41 @@ function AddNewsModal({
                 <SelectValue placeholder="Select institution" />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
-                {INSTITUTIONS.map((inst) => (
-                  <SelectItem key={inst} value={inst}>
-                    {inst}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>Investment Banks</SelectLabel>
+                  {[
+                    "Goldman Sachs",
+                    "JPMorgan Chase",
+                    "Morgan Stanley",
+                    "Citigroup",
+                    "Bank of America",
+                  ].map((inst) => (
+                    <SelectItem key={inst} value={inst}>
+                      {inst}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Central Banks</SelectLabel>
+                  {[
+                    "Federal Reserve",
+                    "European Central Bank",
+                    "Bank of England",
+                    "Bank of Japan",
+                  ].map((inst) => (
+                    <SelectItem key={inst} value={inst}>
+                      {inst}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>International Organizations</SelectLabel>
+                  {["International Monetary Fund", "World Bank"].map((inst) => (
+                    <SelectItem key={inst} value={inst}>
+                      {inst}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -189,11 +333,13 @@ function AddNewsModal({
             />
           </div>
           <div>
-            <Label className="text-foreground mb-1 block">Summary</Label>
+            <Label className="text-foreground mb-1 block">
+              Summary (2-3 sentences)
+            </Label>
             <Textarea
               data-ocid="institutional.summary.textarea"
               className="bg-background border-border resize-none"
-              placeholder="Brief analysis summary..."
+              placeholder="Institutional analysis and market outlook..."
               rows={3}
               value={form.summary}
               onChange={(e) =>
@@ -203,7 +349,9 @@ function AddNewsModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-foreground mb-1 block">Currency</Label>
+              <Label className="text-foreground mb-1 block">
+                Market / Asset
+              </Label>
               <Select
                 value={form.currency}
                 onValueChange={(v) => setForm((p) => ({ ...p, currency: v }))}
@@ -212,19 +360,40 @@ function AddNewsModal({
                   className="bg-background border-border"
                   data-ocid="institutional.currency.select"
                 >
-                  <SelectValue placeholder="Currency" />
+                  <SelectValue placeholder="Select market" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectLabel>Currencies</SelectLabel>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Commodities</SelectLabel>
+                    {COMMODITIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Crypto</SelectLabel>
+                    {CRYPTO.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-foreground mb-1 block">Sentiment</Label>
+              <Label className="text-foreground mb-1 block">
+                Institutional Bias
+              </Label>
               <Select
                 value={form.sentiment}
                 onValueChange={(v) => setForm((p) => ({ ...p, sentiment: v }))}
@@ -244,7 +413,9 @@ function AddNewsModal({
             </div>
           </div>
           <div>
-            <Label className="text-foreground mb-1 block">Date</Label>
+            <Label className="text-foreground mb-1 block">
+              Publication Date
+            </Label>
             <Input
               data-ocid="institutional.date.input"
               type="date"
@@ -271,7 +442,7 @@ function AddNewsModal({
             {submitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            {submitting ? "Saving..." : "Add News"}
+            {submitting ? "Saving..." : "Add Report"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -285,11 +456,14 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>("all");
 
   // Filters
-  const [filterCurrency, setFilterCurrency] = useState("all");
+  const [filterMarket, setFilterMarket] = useState("all");
   const [filterInstitution, setFilterInstitution] = useState("all");
   const [filterSentiment, setFilterSentiment] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [search, setSearch] = useState("");
 
   const fetchNews = useCallback(async () => {
@@ -321,9 +495,9 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     try {
       await actor.createInstitutionalNews(input);
       await fetchNews();
-      toast.success("News added successfully");
+      toast.success("Report added successfully");
     } catch {
-      toast.error("Failed to add news");
+      toast.error("Failed to add report");
       throw new Error("Failed");
     }
   };
@@ -333,20 +507,41 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     try {
       await actor.deleteInstitutionalNews(id);
       setNews((prev) => prev.filter((n) => n.id !== id));
-      toast.success("News deleted");
+      toast.success("Report deleted");
     } catch {
-      toast.error("Failed to delete news");
+      toast.error("Failed to delete report");
     }
   };
 
   const filtered = useMemo(() => {
     return news.filter((item) => {
-      if (filterCurrency !== "all" && item.currency !== filterCurrency)
+      // Tab filter
+      if (
+        activeTab === "currencies" &&
+        getMarketCategory(item.currency) !== "currency"
+      )
+        return false;
+      if (
+        activeTab === "commodities" &&
+        getMarketCategory(item.currency) !== "commodity"
+      )
+        return false;
+      if (
+        activeTab === "crypto" &&
+        getMarketCategory(item.currency) !== "crypto"
+      )
+        return false;
+      if (activeTab === "archive" && !isArchived(item.date)) return false;
+      if (activeTab === "all" && isArchived(item.date)) return false;
+
+      if (filterMarket !== "all" && item.currency !== filterMarket)
         return false;
       if (filterInstitution !== "all" && item.institution !== filterInstitution)
         return false;
       if (filterSentiment !== "all" && item.sentiment !== filterSentiment)
         return false;
+      if (filterDateFrom && item.date < filterDateFrom) return false;
+      if (filterDateTo && item.date > filterDateTo) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         if (
@@ -357,9 +552,17 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       }
       return true;
     });
-  }, [news, filterCurrency, filterInstitution, filterSentiment, search]);
+  }, [
+    news,
+    activeTab,
+    filterMarket,
+    filterInstitution,
+    filterSentiment,
+    filterDateFrom,
+    filterDateTo,
+    search,
+  ]);
 
-  // Sort newest first
   const sorted = useMemo(
     () =>
       [...filtered].sort(
@@ -367,6 +570,34 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       ),
     [filtered],
   );
+
+  const tabCounts = useMemo(
+    () => ({
+      all: news.filter((n) => !isArchived(n.date)).length,
+      currencies: news.filter(
+        (n) =>
+          getMarketCategory(n.currency) === "currency" && !isArchived(n.date),
+      ).length,
+      commodities: news.filter(
+        (n) =>
+          getMarketCategory(n.currency) === "commodity" && !isArchived(n.date),
+      ).length,
+      crypto: news.filter(
+        (n) =>
+          getMarketCategory(n.currency) === "crypto" && !isArchived(n.date),
+      ).length,
+      archive: news.filter((n) => isArchived(n.date)).length,
+    }),
+    [news],
+  );
+
+  const TABS: { key: TabType; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "currencies", label: "Currencies" },
+    { key: "commodities", label: "Commodities" },
+    { key: "crypto", label: "Crypto" },
+    { key: "archive", label: "Archive" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -380,8 +611,8 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             </h1>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
-            Insights and views from major financial institutions influencing
-            currency markets
+            Real-time macro insights from Goldman Sachs, JPMorgan, Federal
+            Reserve, ECB, and more
           </p>
         </div>
         <div className="flex gap-2">
@@ -406,10 +637,38 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
               data-ocid="institutional.add_news.open_modal_button"
             >
               <Plus className="h-4 w-4 mr-1.5" />
-              Add News
+              Add Report
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Sentiment Strip */}
+      {!loading && news.length > 0 && <SentimentStrip news={news} />}
+
+      {/* Category Tabs */}
+      <div
+        className="flex gap-1 flex-wrap"
+        data-ocid="institutional.tabs.panel"
+      >
+        {TABS.map((tab) => (
+          <button
+            type="button"
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            data-ocid={`institutional.${tab.key}.tab`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "bg-teal btn-teal-text"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            <span className="ml-1.5 text-xs opacity-70">
+              ({tabCounts[tab.key]})
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Filter Bar */}
@@ -424,20 +683,39 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={filterCurrency} onValueChange={setFilterCurrency}>
+        <Select value={filterMarket} onValueChange={setFilterMarket}>
           <SelectTrigger
-            className="w-[130px] bg-card border-border"
+            className="w-[140px] bg-card border-border"
             data-ocid="institutional.filter_currency.select"
           >
-            <SelectValue placeholder="Currency" />
+            <SelectValue placeholder="Market" />
           </SelectTrigger>
           <SelectContent className="bg-card border-border">
-            <SelectItem value="all">All Currencies</SelectItem>
-            {CURRENCIES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
+            <SelectItem value="all">All Markets</SelectItem>
+            <SelectGroup>
+              <SelectLabel>Currencies</SelectLabel>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel>Commodities</SelectLabel>
+              {COMMODITIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel>Crypto</SelectLabel>
+              {CRYPTO.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
         <Select value={filterInstitution} onValueChange={setFilterInstitution}>
@@ -470,15 +748,36 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             <SelectItem value="Neutral">Neutral</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex gap-2 items-center">
+          <Input
+            type="date"
+            data-ocid="institutional.date_from.input"
+            className="bg-card border-border w-[140px] text-sm"
+            value={filterDateFrom}
+            onChange={(e) => setFilterDateFrom(e.target.value)}
+            placeholder="From"
+          />
+          <span className="text-muted-foreground text-xs">to</span>
+          <Input
+            type="date"
+            data-ocid="institutional.date_to.input"
+            className="bg-card border-border w-[140px] text-sm"
+            value={filterDateTo}
+            onChange={(e) => setFilterDateTo(e.target.value)}
+            placeholder="To"
+          />
+        </div>
       </div>
 
       {/* Results count */}
       {!loading && (
         <p className="text-xs text-muted-foreground">
-          Showing {sorted.length} of {news.length} news items
-          {(filterCurrency !== "all" ||
+          Showing {sorted.length} of {news.length} reports
+          {(filterMarket !== "all" ||
             filterInstitution !== "all" ||
             filterSentiment !== "all" ||
+            filterDateFrom ||
+            filterDateTo ||
             search) &&
             " (filtered)"}
         </p>
@@ -500,23 +799,26 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
           className="flex flex-col items-center justify-center gap-3 py-16 text-center border border-dashed border-border rounded-xl"
         >
           <Building2 className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-muted-foreground font-medium">No news found</p>
+          <p className="text-muted-foreground font-medium">No reports found</p>
           <p className="text-xs text-muted-foreground/60">
             {news.length === 0
-              ? "No institutional news has been added yet."
-              : "Try adjusting your filters or search query."}
+              ? "No institutional reports have been added yet."
+              : activeTab === "archive"
+                ? "No archived reports. Items older than 30 days appear here."
+                : "Try adjusting your filters or search query."}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((item, idx) => {
             const archived = isArchived(item.date);
+            const cat = getMarketCategory(item.currency);
             const instColor =
               INSTITUTION_COLORS[item.institution] ??
               "bg-muted text-muted-foreground border-border";
             const sentColor =
-              SENTIMENT_STYLES[item.sentiment] ??
-              "bg-muted text-muted-foreground border-border";
+              SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
+            const mktColor = MARKET_TAG_STYLES[cat];
             return (
               <Card
                 key={item.id}
@@ -563,17 +865,18 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
                     {item.summary}
                   </p>
                   <div className="flex items-center justify-between">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
                       <Badge
                         variant="outline"
-                        className="text-xs border border-border text-muted-foreground"
+                        className={`text-xs border ${mktColor}`}
                       >
                         {item.currency}
                       </Badge>
                       <Badge
                         variant="outline"
-                        className={`text-xs border ${sentColor}`}
+                        className={`text-xs border ${sentColor} flex items-center gap-1`}
                       >
+                        <SentimentIcon sentiment={item.sentiment} />
                         {item.sentiment}
                       </Badge>
                     </div>

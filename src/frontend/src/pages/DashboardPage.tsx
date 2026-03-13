@@ -22,6 +22,7 @@ import {
   BarChart2,
   Building2,
   DollarSign,
+  Minus,
   Target,
   TrendingDown,
   TrendingUp,
@@ -44,6 +45,7 @@ import {
 } from "recharts";
 import type {
   ExtendedAnalytics,
+  InstitutionalNews,
   SentimentSummary,
   Trade,
   TradeSegment,
@@ -265,18 +267,33 @@ const SENTIMENT_STYLES: Record<string, string> = {
   Neutral: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
 };
 
+function SentimentIcon({ sentiment }: { sentiment: string }) {
+  if (sentiment === "Bullish") return <TrendingUp className="h-3 w-3" />;
+  if (sentiment === "Bearish") return <TrendingDown className="h-3 w-3" />;
+  return <Minus className="h-3 w-3" />;
+}
+
 function InstitutionalSentimentWidget({
   onNavigate,
 }: { onNavigate?: (page: string) => void }) {
   const { actor, isFetching: actorFetching } = useActor();
   const [summary, setSummary] = useState<SentimentSummary[]>([]);
+  const [latestNews, setLatestNews] = useState<InstitutionalNews[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchSummary = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!actor) return;
     try {
-      const result = await (actor as any).getInstitutionalSentimentSummary();
-      setSummary(result);
+      const [sentResult, newsResult] = await Promise.all([
+        (actor as any).getInstitutionalSentimentSummary(),
+        (actor as any).getInstitutionalNews(),
+      ]);
+      setSummary(sentResult ?? []);
+      const sorted = (newsResult ?? []).sort(
+        (a: InstitutionalNews, b: InstitutionalNews) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+      setLatestNews(sorted.slice(0, 1));
     } catch {
       // silent
     }
@@ -285,10 +302,10 @@ function InstitutionalSentimentWidget({
   useEffect(() => {
     if (!actor || actorFetching) return;
     setLoading(true);
-    fetchSummary().finally(() => setLoading(false));
-  }, [actor, actorFetching, fetchSummary]);
+    fetchData().finally(() => setLoading(false));
+  }, [actor, actorFetching, fetchData]);
 
-  // Pick the dominant sentiment per currency
+  // Dominant sentiment per asset from last 60 days
   const byCurrency = useMemo(() => {
     const map: Record<string, { sentiment: string; count: number }> = {};
     for (const item of summary) {
@@ -300,7 +317,17 @@ function InstitutionalSentimentWidget({
     return map;
   }, [summary]);
 
-  const currencies = Object.keys(byCurrency);
+  const grouped = useMemo(
+    () => ({
+      currencies: ["USD", "EUR", "GBP", "JPY"].filter((c) => byCurrency[c]),
+      commodities: ["Gold", "Oil"].filter((c) => byCurrency[c]),
+      crypto: ["Bitcoin", "Ethereum"].filter((c) => byCurrency[c]),
+    }),
+    [byCurrency],
+  );
+
+  const hasData = Object.values(byCurrency).length > 0;
+  const latest = latestNews[0];
 
   return (
     <Card
@@ -312,7 +339,7 @@ function InstitutionalSentimentWidget({
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-teal" />
             <CardTitle className="text-sm font-semibold text-foreground">
-              Institutional Sentiment
+              Institutional Sentiment Overview
             </CardTitle>
           </div>
           {onNavigate && (
@@ -327,7 +354,7 @@ function InstitutionalSentimentWidget({
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         {loading ? (
           <div
             className="space-y-2"
@@ -340,7 +367,7 @@ function InstitutionalSentimentWidget({
               </div>
             ))}
           </div>
-        ) : currencies.length === 0 ? (
+        ) : !hasData ? (
           <p
             className="text-xs text-muted-foreground/60 text-center py-2"
             data-ocid="institutional.sentiment.empty_state"
@@ -348,29 +375,143 @@ function InstitutionalSentimentWidget({
             No sentiment data yet
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {currencies.map((currency) => {
-              const { sentiment } = byCurrency[currency];
-              const style =
-                SENTIMENT_STYLES[sentiment] ??
-                "bg-muted text-muted-foreground border-border";
-              return (
-                <div
-                  key={currency}
-                  className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-background/50"
-                >
-                  <span className="text-xs font-semibold text-foreground">
-                    {currency}
-                  </span>
-                  <span
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${style}`}
-                  >
-                    {sentiment}
-                  </span>
+          <>
+            {/* Sentiment grid */}
+            <div className="space-y-2">
+              {grouped.currencies.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                    Currencies
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grouped.currencies.map((currency) => {
+                      const { sentiment } = byCurrency[currency];
+                      const style =
+                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                      return (
+                        <div
+                          key={currency}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
+                        >
+                          <span className="text-xs font-semibold text-foreground">
+                            {currency}
+                          </span>
+                          <span
+                            className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
+                          >
+                            <SentimentIcon sentiment={sentiment} />
+                            {sentiment}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+              {grouped.commodities.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                    Commodities
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grouped.commodities.map((currency) => {
+                      const { sentiment } = byCurrency[currency];
+                      const style =
+                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                      return (
+                        <div
+                          key={currency}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
+                        >
+                          <span className="text-xs font-semibold text-foreground">
+                            {currency}
+                          </span>
+                          <span
+                            className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
+                          >
+                            <SentimentIcon sentiment={sentiment} />
+                            {sentiment}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {grouped.crypto.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                    Crypto
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grouped.crypto.map((currency) => {
+                      const { sentiment } = byCurrency[currency];
+                      const style =
+                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                      return (
+                        <div
+                          key={currency}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
+                        >
+                          <span className="text-xs font-semibold text-foreground">
+                            {currency}
+                          </span>
+                          <span
+                            className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
+                          >
+                            <SentimentIcon sentiment={sentiment} />
+                            {sentiment}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {grouped.currencies.length === 0 &&
+                grouped.commodities.length === 0 &&
+                grouped.crypto.length === 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(byCurrency)
+                      .slice(0, 6)
+                      .map(([currency, { sentiment }]) => {
+                        const style =
+                          SENTIMENT_STYLES[sentiment] ??
+                          SENTIMENT_STYLES.Neutral;
+                        return (
+                          <div
+                            key={currency}
+                            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-background/50"
+                          >
+                            <span className="text-xs font-semibold text-foreground">
+                              {currency}
+                            </span>
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${style}`}
+                            >
+                              {sentiment}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+            </div>
+            {/* Latest headline */}
+            {latest && (
+              <div className="border-t border-border pt-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                  Latest Update
+                </p>
+                <p className="text-xs font-medium text-foreground line-clamp-2">
+                  {latest.headline}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {latest.institution} · {latest.date}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
