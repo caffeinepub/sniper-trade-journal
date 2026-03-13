@@ -89,9 +89,8 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface _CaffeineStorageRefillResult {
-    success?: boolean;
-    topped_up_amount?: bigint;
+export interface UserProfile {
+    name: string;
 }
 export interface Drill {
     id: string;
@@ -108,33 +107,6 @@ export interface Drill {
     induceNotes: string;
     screenshot?: ExternalBlob;
     symbol: string;
-}
-export interface DrillInput {
-    marketShiftObservations: string;
-    liquidityObservations: string;
-    timeframe: string;
-    entryAnalysis: string;
-    date: string;
-    structureNotes: string;
-    drillType: string;
-    induceNotes: string;
-    screenshot?: ExternalBlob;
-    symbol: string;
-}
-export interface Analytics {
-    totalTrades: bigint;
-    avgRR: number;
-    wins: bigint;
-    exitedEarlyPercent: number;
-    losses: bigint;
-    totalNetR: number;
-    movedStopLossPercent: number;
-    breakEvens: bigint;
-    avgRMultiple: number;
-    expectancy: number;
-    winRate: number;
-    followedRulesPercent: number;
-    profitFactor: number;
 }
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
@@ -157,6 +129,7 @@ export interface Trade {
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     updatedAt: bigint;
     rrRatio: number;
@@ -167,9 +140,66 @@ export interface Trade {
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
+}
+export interface _CaffeineStorageCreateCertificateResult {
+    method: string;
+    blob_hash: string;
+}
+export interface TradeSegment {
+    totalTrades: bigint;
+    avgRR: number;
+    segmentLabel: string;
+    winRate: number;
+}
+export interface DrillInput {
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
+export interface ExtendedAnalytics {
+    totalTrades: bigint;
+    avgRR: number;
+    tradeSegments: Array<TradeSegment>;
+    wins: bigint;
+    exitedEarlyPercent: number;
+    losses: bigint;
+    totalNetR: number;
+    avgLoss: number;
+    sortedRMultiples: Array<number>;
+    movedStopLossPercent: number;
+    breakEvens: bigint;
+    avgRMultiple: number;
+    expectancy: number;
+    winRate: number;
+    followedRulesPercent: number;
+    profitFactor: number;
+    avgWin: number;
+}
+export interface Analytics {
+    totalTrades: bigint;
+    avgRR: number;
+    wins: bigint;
+    exitedEarlyPercent: number;
+    losses: bigint;
+    totalNetR: number;
+    movedStopLossPercent: number;
+    breakEvens: bigint;
+    avgRMultiple: number;
+    expectancy: number;
+    winRate: number;
+    followedRulesPercent: number;
+    profitFactor: number;
 }
 export interface TradeInput {
     result: string;
@@ -186,6 +216,7 @@ export interface TradeInput {
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     rrRatio: number;
     session: string;
@@ -195,19 +226,20 @@ export interface TradeInput {
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
-}
-export interface _CaffeineStorageCreateCertificateResult {
-    method: string;
-    blob_hash: string;
 }
 export interface PlatformStats {
     totalTrades: bigint;
     totalUsersWithTrades: bigint;
     avgWinRate: number;
     mostActiveTrader: Principal;
+}
+export interface _CaffeineStorageRefillResult {
+    success?: boolean;
+    topped_up_amount?: bigint;
 }
 export interface UserStats {
     totalTrades: bigint;
@@ -219,9 +251,6 @@ export interface UserStats {
     avgRMultiple: number;
     winRate: number;
     mostRecentTradeDate: string;
-}
-export interface UserProfile {
-    name: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -250,6 +279,7 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getDrillById(id: string): Promise<Drill | null>;
     getDrills(): Promise<Array<Drill>>;
+    getExtendedAnalytics(): Promise<ExtendedAnalytics>;
     getTradeById(id: string): Promise<Trade | null>;
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;
@@ -557,6 +587,20 @@ export class Backend implements backendInterface {
             return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getExtendedAnalytics(): Promise<ExtendedAnalytics> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getExtendedAnalytics();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getExtendedAnalytics();
+            return result;
+        }
+    }
     async getTradeById(arg0: string): Promise<Trade | null> {
         if (this.processError) {
             try {
@@ -735,6 +779,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     updatedAt: bigint;
     rrRatio: number;
@@ -745,6 +790,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot: [] | [_ExternalBlob];
     symbol: string;
     mainLesson: string;
@@ -766,6 +812,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     updatedAt: bigint;
     rrRatio: number;
@@ -776,6 +823,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
@@ -798,6 +846,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
         psychDuring: value.psychDuring,
         entryReason: value.entryReason,
         rMultiple: value.rMultiple,
+        accountBalance: value.accountBalance,
         setupGrade: value.setupGrade,
         updatedAt: value.updatedAt,
         rrRatio: value.rrRatio,
@@ -808,6 +857,7 @@ async function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promi
         biasBeforeEntry: value.biasBeforeEntry,
         followedRules: value.followedRules,
         exitedEarly: value.exitedEarly,
+        pnlDollar: value.pnlDollar,
         screenshot: record_opt_to_undefined(await from_candid_opt_n11(_uploadFile, _downloadFile, value.screenshot)),
         symbol: value.symbol,
         mainLesson: value.mainLesson
@@ -957,6 +1007,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     rrRatio: number;
     session: string;
@@ -966,6 +1017,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
@@ -984,6 +1036,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     rrRatio: number;
     session: string;
@@ -993,6 +1046,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot: [] | [_ExternalBlob];
     symbol: string;
     mainLesson: string;
@@ -1012,6 +1066,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
         psychDuring: value.psychDuring,
         entryReason: value.entryReason,
         rMultiple: value.rMultiple,
+        accountBalance: value.accountBalance,
         setupGrade: value.setupGrade,
         rrRatio: value.rrRatio,
         session: value.session,
@@ -1021,6 +1076,7 @@ async function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise
         biasBeforeEntry: value.biasBeforeEntry,
         followedRules: value.followedRules,
         exitedEarly: value.exitedEarly,
+        pnlDollar: value.pnlDollar,
         screenshot: value.screenshot ? candid_some(await to_candid_ExternalBlob_n17(_uploadFile, _downloadFile, value.screenshot)) : candid_none(),
         symbol: value.symbol,
         mainLesson: value.mainLesson

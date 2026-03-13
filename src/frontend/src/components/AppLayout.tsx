@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 import {
   BookOpen,
   Brain,
+  Building2,
   Calculator,
   Calendar,
   ChevronRight,
+  Dices,
   LayoutDashboard,
   Loader2,
   LogIn,
@@ -22,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import type { backendInterface } from "../backend.d";
+import type { backendInterface } from "../backend";
 
 export type AppPage =
   | "dashboard"
@@ -34,7 +36,9 @@ export type AppPage =
   | "mastery-new-drill"
   | "mastery-journal"
   | "admin"
-  | "risk-calculator";
+  | "risk-calculator"
+  | "monte-carlo"
+  | "institutional";
 
 interface NavItem {
   id: AppPage;
@@ -82,6 +86,18 @@ const NAV_ITEMS: NavItem[] = [
     label: "Risk Calculator",
     icon: Calculator,
     ocid: "nav.risk_calculator.link",
+  },
+  {
+    id: "monte-carlo",
+    label: "Monte Carlo",
+    icon: Dices,
+    ocid: "nav.monte_carlo.link",
+  },
+  {
+    id: "institutional",
+    label: "Intelligence",
+    icon: Building2,
+    ocid: "nav.institutional.link",
   },
 ];
 

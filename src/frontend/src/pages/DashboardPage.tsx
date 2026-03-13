@@ -1,6 +1,12 @@
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGetAnalytics, useGetTrades } from "@/hooks/useQueries";
+import { useActor } from "@/hooks/useActor";
+import {
+  useGetAnalytics,
+  useGetExtendedAnalytics,
+  useGetTrades,
+} from "@/hooks/useQueries";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
@@ -12,14 +18,17 @@ import {
 } from "@/utils/trade";
 import {
   Activity,
+  AlertTriangle,
   BarChart2,
+  Building2,
+  DollarSign,
   Target,
   TrendingDown,
   TrendingUp,
   Trophy,
   Zap,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -33,7 +42,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { Trade } from "../backend.d";
+import type {
+  ExtendedAnalytics,
+  SentimentSummary,
+  Trade,
+  TradeSegment,
+} from "../backend.d";
 
 interface KPICardProps {
   title: string;
@@ -180,9 +194,194 @@ const CustomTooltip = ({
   return null;
 };
 
+// ---- Kelly Fraction calculation ----
+function computeKelly(analytics: ExtendedAnalytics) {
+  const W = analytics.winRate / 100;
+  const avgWin = analytics.avgWin > 0 ? analytics.avgWin : 1;
+  const avgLoss = analytics.avgLoss > 0 ? analytics.avgLoss : 1;
+  // f* = W/avgLoss - (1-W)/avgWin
+  const fStar = W / avgLoss - (1 - W) / avgWin;
+  return Math.max(0, fStar);
+}
+
+// ---- Risk of Ruin calculation ----
+function computeRiskOfRuin(analytics: ExtendedAnalytics, riskPerTrade: number) {
+  const p = analytics.winRate / 100;
+  const q = 1 - p;
+  if (p <= 0 || q <= 0 || riskPerTrade <= 0) {
+    return { ruin50: 0, ruinBlowup: 0, safeRisk: 2 };
+  }
+  const ratio = q / p;
+  const steps50 = Math.max(1, Math.floor(0.5 / riskPerTrade));
+  const steps100 = Math.max(1, Math.floor(1.0 / riskPerTrade));
+  const ruin50 = Math.min(100, ratio ** steps50 * 100);
+  const ruinBlowup = Math.min(100, ratio ** steps100 * 100);
+  // Safe risk: keep ruin50 < 5%
+  const safeRisk =
+    analytics.profitFactor > 1
+      ? Math.min(2, Math.max(0.5, analytics.expectancy * 2))
+      : 0.5;
+  return { ruin50, ruinBlowup, safeRisk };
+}
+
+// ---- Equity Curve Simulator ----
+function computeEquityCurveSimulator(
+  analytics: ExtendedAnalytics,
+  startBalance: number,
+  riskPct: number,
+) {
+  const winRate = analytics.winRate / 100;
+  const avgRR = analytics.avgRR > 0 ? analytics.avgRR : 1;
+  const r = riskPct / 100;
+  const dataPoints = [0, 25, 50, 75, 100, 125, 150, 175, 200];
+  return dataPoints.map((n) => {
+    const expected =
+      startBalance * (1 + r * winRate * avgRR - r * (1 - winRate)) ** n;
+    const bestCase = startBalance * (1 + r * avgRR) ** n;
+    const worstCase = startBalance * (1 - r) ** n;
+    return {
+      trade: n,
+      expected: Math.round(expected),
+      bestCase: Math.round(bestCase),
+      worstCase: Math.round(worstCase),
+    };
+  });
+}
+
+// ---- Strategy Edge Stability ----
+function computeEdgeStatus(segments: TradeSegment[]) {
+  if (segments.length < 2) return "insufficient";
+  const first = segments[0];
+  const last = segments[segments.length - 1];
+  const diff = last.winRate - first.winRate;
+  if (diff > 5) return "improving";
+  if (diff < -5) return "declining";
+  return "stable";
+}
+
+const SENTIMENT_STYLES: Record<string, string> = {
+  Bullish: "bg-trade-win/15 text-trade-win border-trade-win/30",
+  Bearish: "bg-trade-loss/15 text-trade-loss border-trade-loss/30",
+  Neutral: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+};
+
+function InstitutionalSentimentWidget({
+  onNavigate,
+}: { onNavigate?: (page: string) => void }) {
+  const { actor, isFetching: actorFetching } = useActor();
+  const [summary, setSummary] = useState<SentimentSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSummary = useCallback(async () => {
+    if (!actor) return;
+    try {
+      const result = await (actor as any).getInstitutionalSentimentSummary();
+      setSummary(result);
+    } catch {
+      // silent
+    }
+  }, [actor]);
+
+  useEffect(() => {
+    if (!actor || actorFetching) return;
+    setLoading(true);
+    fetchSummary().finally(() => setLoading(false));
+  }, [actor, actorFetching, fetchSummary]);
+
+  // Pick the dominant sentiment per currency
+  const byCurrency = useMemo(() => {
+    const map: Record<string, { sentiment: string; count: number }> = {};
+    for (const item of summary) {
+      const cnt = Number(item.count);
+      if (!map[item.currency] || cnt > map[item.currency].count) {
+        map[item.currency] = { sentiment: item.sentiment, count: cnt };
+      }
+    }
+    return map;
+  }, [summary]);
+
+  const currencies = Object.keys(byCurrency);
+
+  return (
+    <Card
+      className="bg-card border-border"
+      data-ocid="institutional.sentiment.card"
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-teal" />
+            <CardTitle className="text-sm font-semibold text-foreground">
+              Institutional Sentiment
+            </CardTitle>
+          </div>
+          {onNavigate && (
+            <button
+              type="button"
+              className="text-xs text-teal hover:underline"
+              onClick={() => onNavigate("institutional")}
+              data-ocid="institutional.sentiment.link"
+            >
+              View All
+            </button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div
+            className="space-y-2"
+            data-ocid="institutional.sentiment.loading_state"
+          >
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex justify-between items-center">
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : currencies.length === 0 ? (
+          <p
+            className="text-xs text-muted-foreground/60 text-center py-2"
+            data-ocid="institutional.sentiment.empty_state"
+          >
+            No sentiment data yet
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {currencies.map((currency) => {
+              const { sentiment } = byCurrency[currency];
+              const style =
+                SENTIMENT_STYLES[sentiment] ??
+                "bg-muted text-muted-foreground border-border";
+              return (
+                <div
+                  key={currency}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-background/50"
+                >
+                  <span className="text-xs font-semibold text-foreground">
+                    {currency}
+                  </span>
+                  <span
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${style}`}
+                  >
+                    {sentiment}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const { data: tradesData, isLoading: tradesLoading } = useGetTrades();
   const { data: analytics, isLoading: analyticsLoading } = useGetAnalytics();
+  const { data: extendedAnalytics, isLoading: extendedLoading } =
+    useGetExtendedAnalytics();
   const CHART_COLORS = useChartColors();
 
   const trades: Trade[] = useMemo(() => {
@@ -200,7 +399,58 @@ export default function DashboardPage() {
   );
   const psychStats = useMemo(() => computePsychStats(trades), [trades]);
 
-  const loading = tradesLoading || analyticsLoading;
+  const loading = tradesLoading || analyticsLoading || extendedLoading;
+
+  // Extended analytics derived values
+  const totalTradeCount = extendedAnalytics
+    ? Number(extendedAnalytics.totalTrades)
+    : trades.length;
+
+  const kellyFraction = useMemo(() => {
+    if (!extendedAnalytics || totalTradeCount < 20) return null;
+    return computeKelly(extendedAnalytics);
+  }, [extendedAnalytics, totalTradeCount]);
+
+  const kellyReliability = useMemo(() => {
+    if (totalTradeCount < 20) return "insufficient";
+    if (totalTradeCount < 50) return "low";
+    if (totalTradeCount < 100) return "medium";
+    return "high";
+  }, [totalTradeCount]);
+
+  const avgRiskPct = useMemo(() => {
+    if (trades.length === 0) return 0.01;
+    return trades.reduce((s, t) => s + t.riskPercent, 0) / trades.length / 100;
+  }, [trades]);
+
+  const riskOfRuinData = useMemo(() => {
+    if (!extendedAnalytics || totalTradeCount < 10) return null;
+    return computeRiskOfRuin(extendedAnalytics, avgRiskPct);
+  }, [extendedAnalytics, totalTradeCount, avgRiskPct]);
+
+  const startingBalance = useMemo(() => {
+    for (let i = trades.length - 1; i >= 0; i--) {
+      const bal = (trades[i] as Trade & { accountBalance?: number })
+        .accountBalance;
+      if (bal && bal > 0) return bal;
+    }
+    return 10000;
+  }, [trades]);
+
+  const equityCurveSimData = useMemo(() => {
+    if (!extendedAnalytics || totalTradeCount < 5) return null;
+    const riskPct = avgRiskPct * 100 || 1;
+    return computeEquityCurveSimulator(
+      extendedAnalytics,
+      startingBalance,
+      riskPct,
+    );
+  }, [extendedAnalytics, totalTradeCount, startingBalance, avgRiskPct]);
+
+  const edgeStatus = useMemo(() => {
+    if (!extendedAnalytics) return "insufficient";
+    return computeEdgeStatus(extendedAnalytics.tradeSegments ?? []);
+  }, [extendedAnalytics]);
 
   const winRate = analytics
     ? analytics.winRate
@@ -214,6 +464,7 @@ export default function DashboardPage() {
   const totalNetR = analytics
     ? analytics.totalNetR
     : trades.reduce((s, t) => s + t.rMultiple, 0);
+  const totalPnlDollar = trades.reduce((s, t) => s + t.pnlDollar, 0);
   const profitFactor = analytics ? analytics.profitFactor : 0;
   const expectancy = analytics ? analytics.expectancy : 0;
   const avgRMultiple = analytics ? analytics.avgRMultiple : 0;
@@ -269,6 +520,18 @@ export default function DashboardPage() {
           icon={totalNetR >= 0 ? TrendingUp : TrendingDown}
           positive={totalNetR > 0}
           negative={totalNetR < 0}
+          loading={loading}
+        />
+        <KPICard
+          title="Total P&L ($)"
+          value={
+            totalPnlDollar >= 0
+              ? `+$${totalPnlDollar.toFixed(2)}`
+              : `-$${Math.abs(totalPnlDollar).toFixed(2)}`
+          }
+          icon={DollarSign}
+          positive={totalPnlDollar > 0}
+          negative={totalPnlDollar < 0}
           loading={loading}
         />
         <KPICard
@@ -435,7 +698,9 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Bottom row: Session breakdown + Psychology + Discipline */}
+      {/* Advanced Analytics: Kelly + Risk of Ruin + Equity Sim + Edge Stability */}
+
+      {/* Advanced Analytics row 1: Kelly + Risk of Ruin */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Session Breakdown */}
         <Card className="bg-card border-border">
@@ -611,6 +876,484 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Advanced Analytics: Kelly + Risk of Ruin */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* Kelly Fraction */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3 px-4 pt-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Kelly Fraction
+              </CardTitle>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] font-semibold border",
+                  kellyReliability === "insufficient" &&
+                    "border-muted-foreground/30 text-muted-foreground",
+                  kellyReliability === "low" &&
+                    "border-amber-500/50 text-amber-500 bg-amber-500/10",
+                  kellyReliability === "medium" &&
+                    "border-gold/50 text-gold bg-gold-muted",
+                  kellyReliability === "high" &&
+                    "border-trade-win/50 text-trade-win bg-trade-win-muted",
+                )}
+              >
+                {kellyReliability === "insufficient" &&
+                  `Need 20+ trades (${totalTradeCount} logged)`}
+                {kellyReliability === "low" &&
+                  `Low Reliability (${totalTradeCount} trades)`}
+                {kellyReliability === "medium" &&
+                  `Medium Reliability (${totalTradeCount} trades)`}
+                {kellyReliability === "high" &&
+                  `High Reliability (${totalTradeCount} trades)`}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {kellyReliability === "insufficient" ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+                <BarChart2 className="w-8 h-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Log at least 20 trades to unlock Kelly Fraction
+                </p>
+                <p className="text-xs text-muted-foreground/60">
+                  Kelly requires sufficient trade history for statistical
+                  reliability
+                </p>
+              </div>
+            ) : kellyFraction !== null ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-muted/50 rounded-md p-3 border border-border text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                      Full Kelly
+                    </p>
+                    <p className="text-lg font-bold font-mono text-foreground">
+                      {(kellyFraction * 100).toFixed(2)}%
+                    </p>
+                  </div>
+                  <div className="bg-teal-muted rounded-md p-3 border border-teal/30 text-center relative">
+                    <p className="text-[10px] text-teal uppercase tracking-wider mb-1">
+                      Half Kelly ★
+                    </p>
+                    <p className="text-lg font-bold font-mono text-teal">
+                      {((kellyFraction / 2) * 100).toFixed(2)}%
+                    </p>
+                    <span className="absolute -top-2 right-2 text-[9px] bg-teal text-white px-1.5 py-0.5 rounded-full font-semibold">
+                      Recommended
+                    </span>
+                  </div>
+                  <div className="bg-muted/50 rounded-md p-3 border border-border text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                      Quarter Kelly
+                    </p>
+                    <p className="text-lg font-bold font-mono text-foreground">
+                      {((kellyFraction / 4) * 100).toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Based on Win Rate: {extendedAnalytics?.winRate.toFixed(1)}% ·
+                  Avg Win: {extendedAnalytics?.avgWin.toFixed(2)}R · Avg Loss:{" "}
+                  {extendedAnalytics?.avgLoss.toFixed(2)}R
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Risk of Ruin */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3 px-4 pt-4">
+            <CardTitle className="text-sm font-semibold text-foreground">
+              Risk of Ruin
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            {!riskOfRuinData ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+                <AlertTriangle className="w-8 h-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Log at least 10 trades to unlock Risk of Ruin
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div
+                    className={cn(
+                      "rounded-md p-3 border text-center",
+                      riskOfRuinData.ruin50 > 20
+                        ? "bg-trade-loss-muted border-trade-loss/30"
+                        : riskOfRuinData.ruin50 > 5
+                          ? "bg-gold-muted border-gold/30"
+                          : "bg-trade-win-muted border-trade-win/30",
+                    )}
+                  >
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                      50% Drawdown
+                    </p>
+                    <p
+                      className={cn(
+                        "text-lg font-bold font-mono",
+                        riskOfRuinData.ruin50 > 20
+                          ? "text-trade-loss"
+                          : riskOfRuinData.ruin50 > 5
+                            ? "text-gold"
+                            : "text-trade-win",
+                      )}
+                    >
+                      {riskOfRuinData.ruin50.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      probability
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-md p-3 border text-center",
+                      riskOfRuinData.ruinBlowup > 5
+                        ? "bg-trade-loss-muted border-trade-loss/30"
+                        : riskOfRuinData.ruinBlowup > 1
+                          ? "bg-gold-muted border-gold/30"
+                          : "bg-trade-win-muted border-trade-win/30",
+                    )}
+                  >
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                      Account Blowup
+                    </p>
+                    <p
+                      className={cn(
+                        "text-lg font-bold font-mono",
+                        riskOfRuinData.ruinBlowup > 5
+                          ? "text-trade-loss"
+                          : riskOfRuinData.ruinBlowup > 1
+                            ? "text-gold"
+                            : "text-trade-win",
+                      )}
+                    >
+                      {riskOfRuinData.ruinBlowup.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      probability
+                    </p>
+                  </div>
+                  <div className="bg-teal-muted rounded-md p-3 border border-teal/30 text-center">
+                    <p className="text-[10px] text-teal uppercase tracking-wider mb-1">
+                      Safe Risk
+                    </p>
+                    <p className="text-lg font-bold font-mono text-teal">
+                      {riskOfRuinData.safeRisk.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-teal/70">per trade</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Based on avg risk {(avgRiskPct * 100).toFixed(2)}% per trade ·
+                  Profit Factor:{" "}
+                  {(extendedAnalytics?.profitFactor ?? 0).toFixed(2)}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced Analytics row 2: Equity Curve Simulator + Strategy Edge */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* Equity Curve Simulator */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3 px-4 pt-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Equity Curve Simulator
+              </CardTitle>
+              <span className="text-[10px] text-muted-foreground">
+                Projected growth · {(avgRiskPct * 100).toFixed(1)}% risk/trade
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            {!equityCurveSimData ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
+                <TrendingUp className="w-8 h-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Log at least 5 trades to unlock the Equity Curve Simulator
+                </p>
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart
+                    data={equityCurveSimData}
+                    margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={CHART_COLORS.muted}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="trade"
+                      tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `${v}`}
+                    />
+                    <YAxis
+                      tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) =>
+                        v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
+                      }
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "6px",
+                        fontSize: "11px",
+                      }}
+                      formatter={(v: number, name: string) => [
+                        `$${v.toLocaleString()}`,
+                        name === "expected"
+                          ? "Expected"
+                          : name === "bestCase"
+                            ? "Best Case"
+                            : "Worst Case",
+                      ]}
+                      labelFormatter={(l) => `After ${l} trades`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="expected"
+                      stroke={CHART_COLORS.teal}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="bestCase"
+                      stroke={CHART_COLORS.win}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="worstCase"
+                      stroke={CHART_COLORS.loss}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-4 mt-1 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-4 h-0.5 bg-teal rounded" />
+                    <span className="text-[10px] text-muted-foreground">
+                      Expected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-4 h-0.5 bg-trade-win rounded"
+                      style={{ borderTop: "2px dashed" }}
+                    />
+                    <span className="text-[10px] text-muted-foreground">
+                      Best Case
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-4 h-0.5 bg-trade-loss rounded"
+                      style={{ borderTop: "2px dashed" }}
+                    />
+                    <span className="text-[10px] text-muted-foreground">
+                      Worst Case
+                    </span>
+                  </div>
+                </div>
+                {/* Summary projections */}
+                <div className="grid grid-cols-3 gap-2 mt-2 px-2">
+                  {[50, 100, 200].map((n) => {
+                    const pt = equityCurveSimData.find((d) => d.trade === n);
+                    if (!pt) return null;
+                    const pct =
+                      ((pt.expected - startingBalance) / startingBalance) * 100;
+                    return (
+                      <div
+                        key={n}
+                        className="bg-muted/50 rounded-md p-2 border border-border text-center"
+                      >
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          After {n} trades
+                        </p>
+                        <p
+                          className={cn(
+                            "text-sm font-bold font-mono",
+                            pt.expected >= startingBalance
+                              ? "text-trade-win"
+                              : "text-trade-loss",
+                          )}
+                        >
+                          ${pt.expected.toLocaleString()}
+                        </p>
+                        <p
+                          className={cn(
+                            "text-[10px] font-mono",
+                            pct >= 0 ? "text-trade-win" : "text-trade-loss",
+                          )}
+                        >
+                          {pct >= 0 ? "+" : ""}
+                          {pct.toFixed(1)}%
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Strategy Edge Stability */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3 px-4 pt-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Strategy Edge Stability
+              </CardTitle>
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border",
+                  edgeStatus === "improving" &&
+                    "bg-trade-win-muted border-trade-win/30 text-trade-win",
+                  edgeStatus === "declining" &&
+                    "bg-trade-loss-muted border-trade-loss/30 text-trade-loss",
+                  edgeStatus === "stable" &&
+                    "bg-teal-muted border-teal/30 text-teal",
+                  edgeStatus === "insufficient" &&
+                    "bg-muted border-muted-foreground/20 text-muted-foreground",
+                )}
+              >
+                {edgeStatus === "improving" && (
+                  <>
+                    <TrendingUp className="w-3 h-3" />
+                    Improving
+                  </>
+                )}
+                {edgeStatus === "declining" && (
+                  <>
+                    <TrendingDown className="w-3 h-3" />
+                    Declining
+                  </>
+                )}
+                {edgeStatus === "stable" && (
+                  <>
+                    <Activity className="w-3 h-3" />
+                    Stable
+                  </>
+                )}
+                {edgeStatus === "insufficient" && "Insufficient Data"}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            {edgeStatus === "declining" && (
+              <div className="mx-2 mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-500">
+                  Strategy edge may be weakening. Recent performance is
+                  declining compared to earlier trades.
+                </p>
+              </div>
+            )}
+            {!extendedAnalytics ||
+            !extendedAnalytics.tradeSegments ||
+            extendedAnalytics.tradeSegments.length < 2 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+                <Activity className="w-8 h-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Keep logging trades to unlock edge analysis
+                </p>
+                <p className="text-xs text-muted-foreground/60">
+                  Requires at least 2 segments (~100 trades) for comparison
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={extendedAnalytics.tradeSegments.map((s) => ({
+                    name: s.segmentLabel,
+                    winRate: s.winRate,
+                    avgRR: s.avgRR,
+                  }))}
+                  margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={CHART_COLORS.muted}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                    }}
+                    formatter={(v: number, name: string) => [
+                      name === "winRate"
+                        ? `${v.toFixed(1)}%`
+                        : `${v.toFixed(2)}R`,
+                      name === "winRate" ? "Win Rate" : "Avg R:R",
+                    ]}
+                  />
+                  <Bar dataKey="winRate" radius={[3, 3, 0, 0]}>
+                    {extendedAnalytics.tradeSegments.map((seg, idx) => (
+                      <Cell
+                        key={`cell-${seg.segmentLabel}`}
+                        fill={
+                          idx === extendedAnalytics.tradeSegments.length - 1
+                            ? edgeStatus === "improving"
+                              ? CHART_COLORS.win
+                              : edgeStatus === "declining"
+                                ? CHART_COLORS.loss
+                                : CHART_COLORS.teal
+                            : CHART_COLORS.text
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Institutional Sentiment Widget */}
+      <InstitutionalSentimentWidget onNavigate={undefined} />
     </div>
   );
 }

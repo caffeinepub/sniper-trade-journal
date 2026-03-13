@@ -276,6 +276,59 @@ function TradeDetailModal({
               </div>
             </div>
 
+            {/* P&L row */}
+            {(trade.pnlPercent !== 0 || trade.pnlDollar !== 0) && (
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  className={cn(
+                    "rounded-md px-3 py-2 border text-center",
+                    trade.pnlPercent >= 0
+                      ? "bg-trade-win-muted border-trade-win/30"
+                      : "bg-trade-loss-muted border-trade-loss/30",
+                  )}
+                >
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5 opacity-70">
+                    P&amp;L %
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm font-bold font-mono",
+                      trade.pnlPercent >= 0
+                        ? "text-trade-win"
+                        : "text-trade-loss",
+                    )}
+                  >
+                    {trade.pnlPercent >= 0 ? "+" : ""}
+                    {trade.pnlPercent.toFixed(2)}%
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "rounded-md px-3 py-2 border text-center",
+                    trade.pnlDollar >= 0
+                      ? "bg-trade-win-muted border-trade-win/30"
+                      : "bg-trade-loss-muted border-trade-loss/30",
+                  )}
+                >
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5 opacity-70">
+                    P&amp;L ($)
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm font-bold font-mono",
+                      trade.pnlDollar >= 0
+                        ? "text-trade-win"
+                        : "text-trade-loss",
+                    )}
+                  >
+                    {trade.pnlDollar >= 0
+                      ? `+$${trade.pnlDollar.toFixed(2)}`
+                      : `-$${Math.abs(trade.pnlDollar).toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Basic info */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <div>
@@ -328,6 +381,16 @@ function TradeDetailModal({
                   {displayGrade(trade.setupGrade)}
                 </span>
               </div>
+              {trade.accountBalance > 0 && (
+                <div>
+                  <span className="text-muted-foreground text-xs">
+                    Balance:
+                  </span>
+                  <span className="ml-2 font-mono text-sm">
+                    ${trade.accountBalance.toLocaleString()}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Prices */}
@@ -986,6 +1049,37 @@ function TradeCard({
                   {trade.rMultiple.toFixed(2)}R
                 </span>
               </div>
+              {trade.pnlPercent !== 0 && (
+                <div className="text-xs">
+                  <span
+                    className={cn(
+                      "font-mono",
+                      trade.pnlPercent >= 0
+                        ? "text-trade-win"
+                        : "text-trade-loss",
+                    )}
+                  >
+                    {trade.pnlPercent >= 0 ? "+" : ""}
+                    {trade.pnlPercent.toFixed(2)}%
+                  </span>
+                </div>
+              )}
+              {trade.pnlDollar !== 0 && (
+                <div className="text-xs">
+                  <span
+                    className={cn(
+                      "font-mono font-bold",
+                      trade.pnlDollar >= 0
+                        ? "text-trade-win"
+                        : "text-trade-loss",
+                    )}
+                  >
+                    {trade.pnlDollar >= 0
+                      ? `+$${trade.pnlDollar.toFixed(2)}`
+                      : `-$${Math.abs(trade.pnlDollar).toFixed(2)}`}
+                  </span>
+                </div>
+              )}
             </div>
 
             <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

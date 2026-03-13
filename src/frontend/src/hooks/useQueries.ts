@@ -4,6 +4,7 @@ import type {
   Analytics,
   Drill,
   DrillInput,
+  ExtendedAnalytics,
   Trade,
   TradeInput,
 } from "../backend.d";
@@ -69,6 +70,40 @@ export function useGetAnalytics() {
   });
 }
 
+export function useGetExtendedAnalytics() {
+  const { actor, isFetching } = useActor();
+  return useQuery<ExtendedAnalytics>({
+    queryKey: ["extendedAnalytics"],
+    queryFn: async () => {
+      if (!actor)
+        return {
+          totalTrades: 0n,
+          wins: 0n,
+          losses: 0n,
+          breakEvens: 0n,
+          winRate: 0,
+          avgRR: 0,
+          avgRMultiple: 0,
+          totalNetR: 0,
+          profitFactor: 0,
+          expectancy: 0,
+          followedRulesPercent: 0,
+          exitedEarlyPercent: 0,
+          movedStopLossPercent: 0,
+          avgWin: 0,
+          avgLoss: 0,
+          sortedRMultiples: [],
+          tradeSegments: [],
+        } as ExtendedAnalytics;
+      return actor.getExtendedAnalytics();
+    },
+    enabled: !!actor && !isFetching,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 0,
+  });
+}
+
 export function useGetUniqueTags() {
   const { actor, isFetching } = useActor();
   return useQuery<string[]>({
@@ -94,6 +129,7 @@ export function useCreateTrade() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["extendedAnalytics"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });
@@ -111,6 +147,7 @@ export function useUpdateTrade() {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
       queryClient.invalidateQueries({ queryKey: ["trade", vars.id] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["extendedAnalytics"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });
@@ -127,6 +164,7 @@ export function useDeleteTrade() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["extendedAnalytics"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });

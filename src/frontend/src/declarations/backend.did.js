@@ -70,6 +70,7 @@ export const Trade = IDL.Record({
   'psychDuring' : IDL.Vec(IDL.Text),
   'entryReason' : IDL.Text,
   'rMultiple' : IDL.Float64,
+  'accountBalance' : IDL.Float64,
   'setupGrade' : IDL.Text,
   'updatedAt' : IDL.Int,
   'rrRatio' : IDL.Float64,
@@ -80,6 +81,7 @@ export const Trade = IDL.Record({
   'biasBeforeEntry' : IDL.Text,
   'followedRules' : IDL.Bool,
   'exitedEarly' : IDL.Bool,
+  'pnlDollar' : IDL.Float64,
   'screenshot' : IDL.Opt(ExternalBlob),
   'symbol' : IDL.Text,
   'mainLesson' : IDL.Text,
@@ -132,6 +134,7 @@ export const TradeInput = IDL.Record({
   'psychDuring' : IDL.Vec(IDL.Text),
   'entryReason' : IDL.Text,
   'rMultiple' : IDL.Float64,
+  'accountBalance' : IDL.Float64,
   'setupGrade' : IDL.Text,
   'rrRatio' : IDL.Float64,
   'session' : IDL.Text,
@@ -141,11 +144,37 @@ export const TradeInput = IDL.Record({
   'biasBeforeEntry' : IDL.Text,
   'followedRules' : IDL.Bool,
   'exitedEarly' : IDL.Bool,
+  'pnlDollar' : IDL.Float64,
   'screenshot' : IDL.Opt(ExternalBlob),
   'symbol' : IDL.Text,
   'mainLesson' : IDL.Text,
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const TradeSegment = IDL.Record({
+  'totalTrades' : IDL.Nat,
+  'avgRR' : IDL.Float64,
+  'segmentLabel' : IDL.Text,
+  'winRate' : IDL.Float64,
+});
+export const ExtendedAnalytics = IDL.Record({
+  'totalTrades' : IDL.Nat,
+  'avgRR' : IDL.Float64,
+  'tradeSegments' : IDL.Vec(TradeSegment),
+  'wins' : IDL.Nat,
+  'exitedEarlyPercent' : IDL.Float64,
+  'losses' : IDL.Nat,
+  'totalNetR' : IDL.Float64,
+  'avgLoss' : IDL.Float64,
+  'sortedRMultiples' : IDL.Vec(IDL.Float64),
+  'movedStopLossPercent' : IDL.Float64,
+  'breakEvens' : IDL.Nat,
+  'avgRMultiple' : IDL.Float64,
+  'expectancy' : IDL.Float64,
+  'winRate' : IDL.Float64,
+  'followedRulesPercent' : IDL.Float64,
+  'profitFactor' : IDL.Float64,
+  'avgWin' : IDL.Float64,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -189,6 +218,7 @@ export const idlService = IDL.Service({
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getDrillById' : IDL.Func([IDL.Text], [IDL.Opt(Drill)], ['query']),
   'getDrills' : IDL.Func([], [IDL.Vec(Drill)], ['query']),
+  'getExtendedAnalytics' : IDL.Func([], [ExtendedAnalytics], ['query']),
   'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
   'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
   'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
@@ -269,6 +299,7 @@ export const idlFactory = ({ IDL }) => {
     'psychDuring' : IDL.Vec(IDL.Text),
     'entryReason' : IDL.Text,
     'rMultiple' : IDL.Float64,
+    'accountBalance' : IDL.Float64,
     'setupGrade' : IDL.Text,
     'updatedAt' : IDL.Int,
     'rrRatio' : IDL.Float64,
@@ -279,6 +310,7 @@ export const idlFactory = ({ IDL }) => {
     'biasBeforeEntry' : IDL.Text,
     'followedRules' : IDL.Bool,
     'exitedEarly' : IDL.Bool,
+    'pnlDollar' : IDL.Float64,
     'screenshot' : IDL.Opt(ExternalBlob),
     'symbol' : IDL.Text,
     'mainLesson' : IDL.Text,
@@ -331,6 +363,7 @@ export const idlFactory = ({ IDL }) => {
     'psychDuring' : IDL.Vec(IDL.Text),
     'entryReason' : IDL.Text,
     'rMultiple' : IDL.Float64,
+    'accountBalance' : IDL.Float64,
     'setupGrade' : IDL.Text,
     'rrRatio' : IDL.Float64,
     'session' : IDL.Text,
@@ -340,11 +373,37 @@ export const idlFactory = ({ IDL }) => {
     'biasBeforeEntry' : IDL.Text,
     'followedRules' : IDL.Bool,
     'exitedEarly' : IDL.Bool,
+    'pnlDollar' : IDL.Float64,
     'screenshot' : IDL.Opt(ExternalBlob),
     'symbol' : IDL.Text,
     'mainLesson' : IDL.Text,
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const TradeSegment = IDL.Record({
+    'totalTrades' : IDL.Nat,
+    'avgRR' : IDL.Float64,
+    'segmentLabel' : IDL.Text,
+    'winRate' : IDL.Float64,
+  });
+  const ExtendedAnalytics = IDL.Record({
+    'totalTrades' : IDL.Nat,
+    'avgRR' : IDL.Float64,
+    'tradeSegments' : IDL.Vec(TradeSegment),
+    'wins' : IDL.Nat,
+    'exitedEarlyPercent' : IDL.Float64,
+    'losses' : IDL.Nat,
+    'totalNetR' : IDL.Float64,
+    'avgLoss' : IDL.Float64,
+    'sortedRMultiples' : IDL.Vec(IDL.Float64),
+    'movedStopLossPercent' : IDL.Float64,
+    'breakEvens' : IDL.Nat,
+    'avgRMultiple' : IDL.Float64,
+    'expectancy' : IDL.Float64,
+    'winRate' : IDL.Float64,
+    'followedRulesPercent' : IDL.Float64,
+    'profitFactor' : IDL.Float64,
+    'avgWin' : IDL.Float64,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -392,6 +451,7 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getDrillById' : IDL.Func([IDL.Text], [IDL.Opt(Drill)], ['query']),
     'getDrills' : IDL.Func([], [IDL.Vec(Drill)], ['query']),
+    'getExtendedAnalytics' : IDL.Func([], [ExtendedAnalytics], ['query']),
     'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
     'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
     'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),

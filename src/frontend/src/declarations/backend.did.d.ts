@@ -53,6 +53,25 @@ export interface DrillInput {
   'screenshot' : [] | [ExternalBlob],
   'symbol' : string,
 }
+export interface ExtendedAnalytics {
+  'totalTrades' : bigint,
+  'avgRR' : number,
+  'tradeSegments' : Array<TradeSegment>,
+  'wins' : bigint,
+  'exitedEarlyPercent' : number,
+  'losses' : bigint,
+  'totalNetR' : number,
+  'avgLoss' : number,
+  'sortedRMultiples' : Array<number>,
+  'movedStopLossPercent' : number,
+  'breakEvens' : bigint,
+  'avgRMultiple' : number,
+  'expectancy' : number,
+  'winRate' : number,
+  'followedRulesPercent' : number,
+  'profitFactor' : number,
+  'avgWin' : number,
+}
 export type ExternalBlob = Uint8Array;
 export interface PlatformStats {
   'totalTrades' : bigint,
@@ -78,6 +97,7 @@ export interface Trade {
   'psychDuring' : Array<string>,
   'entryReason' : string,
   'rMultiple' : number,
+  'accountBalance' : number,
   'setupGrade' : string,
   'updatedAt' : bigint,
   'rrRatio' : number,
@@ -88,6 +108,7 @@ export interface Trade {
   'biasBeforeEntry' : string,
   'followedRules' : boolean,
   'exitedEarly' : boolean,
+  'pnlDollar' : number,
   'screenshot' : [] | [ExternalBlob],
   'symbol' : string,
   'mainLesson' : string,
@@ -107,6 +128,7 @@ export interface TradeInput {
   'psychDuring' : Array<string>,
   'entryReason' : string,
   'rMultiple' : number,
+  'accountBalance' : number,
   'setupGrade' : string,
   'rrRatio' : number,
   'session' : string,
@@ -116,9 +138,16 @@ export interface TradeInput {
   'biasBeforeEntry' : string,
   'followedRules' : boolean,
   'exitedEarly' : boolean,
+  'pnlDollar' : number,
   'screenshot' : [] | [ExternalBlob],
   'symbol' : string,
   'mainLesson' : string,
+}
+export interface TradeSegment {
+  'totalTrades' : bigint,
+  'avgRR' : number,
+  'segmentLabel' : string,
+  'winRate' : number,
 }
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
@@ -177,6 +206,7 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getDrillById' : ActorMethod<[string], [] | [Drill]>,
   'getDrills' : ActorMethod<[], Array<Drill>>,
+  'getExtendedAnalytics' : ActorMethod<[], ExtendedAnalytics>,
   'getTradeById' : ActorMethod<[string], [] | [Trade]>,
   'getTrades' : ActorMethod<[], Array<Trade>>,
   'getUniqueTags' : ActorMethod<[], Array<string>>,

@@ -14,6 +14,9 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export interface UserProfile {
+    name: string;
+}
 export interface Drill {
     id: string;
     marketShiftObservations: string;
@@ -29,33 +32,6 @@ export interface Drill {
     induceNotes: string;
     screenshot?: ExternalBlob;
     symbol: string;
-}
-export interface DrillInput {
-    marketShiftObservations: string;
-    liquidityObservations: string;
-    timeframe: string;
-    entryAnalysis: string;
-    date: string;
-    structureNotes: string;
-    drillType: string;
-    induceNotes: string;
-    screenshot?: ExternalBlob;
-    symbol: string;
-}
-export interface Analytics {
-    totalTrades: bigint;
-    avgRR: number;
-    wins: bigint;
-    exitedEarlyPercent: number;
-    losses: bigint;
-    totalNetR: number;
-    movedStopLossPercent: number;
-    breakEvens: bigint;
-    avgRMultiple: number;
-    expectancy: number;
-    winRate: number;
-    followedRulesPercent: number;
-    profitFactor: number;
 }
 export interface Trade {
     id: string;
@@ -75,6 +51,7 @@ export interface Trade {
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     updatedAt: bigint;
     rrRatio: number;
@@ -85,9 +62,62 @@ export interface Trade {
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
+}
+export interface TradeSegment {
+    totalTrades: bigint;
+    avgRR: number;
+    segmentLabel: string;
+    winRate: number;
+}
+export interface DrillInput {
+    marketShiftObservations: string;
+    liquidityObservations: string;
+    timeframe: string;
+    entryAnalysis: string;
+    date: string;
+    structureNotes: string;
+    drillType: string;
+    induceNotes: string;
+    screenshot?: ExternalBlob;
+    symbol: string;
+}
+export interface ExtendedAnalytics {
+    totalTrades: bigint;
+    avgRR: number;
+    tradeSegments: Array<TradeSegment>;
+    wins: bigint;
+    exitedEarlyPercent: number;
+    losses: bigint;
+    totalNetR: number;
+    avgLoss: number;
+    sortedRMultiples: Array<number>;
+    movedStopLossPercent: number;
+    breakEvens: bigint;
+    avgRMultiple: number;
+    expectancy: number;
+    winRate: number;
+    followedRulesPercent: number;
+    profitFactor: number;
+    avgWin: number;
+}
+export interface Analytics {
+    totalTrades: bigint;
+    avgRR: number;
+    wins: bigint;
+    exitedEarlyPercent: number;
+    losses: bigint;
+    totalNetR: number;
+    movedStopLossPercent: number;
+    breakEvens: bigint;
+    avgRMultiple: number;
+    expectancy: number;
+    winRate: number;
+    followedRulesPercent: number;
+    profitFactor: number;
 }
 export interface TradeInput {
     result: string;
@@ -104,6 +134,7 @@ export interface TradeInput {
     psychDuring: Array<string>;
     entryReason: string;
     rMultiple: number;
+    accountBalance: number;
     setupGrade: string;
     rrRatio: number;
     session: string;
@@ -113,6 +144,7 @@ export interface TradeInput {
     biasBeforeEntry: string;
     followedRules: boolean;
     exitedEarly: boolean;
+    pnlDollar: number;
     screenshot?: ExternalBlob;
     symbol: string;
     mainLesson: string;
@@ -134,8 +166,28 @@ export interface UserStats {
     winRate: number;
     mostRecentTradeDate: string;
 }
-export interface UserProfile {
-    name: string;
+export interface InstitutionalNews {
+    id: string;
+    institution: string;
+    headline: string;
+    summary: string;
+    currency: string;
+    sentiment: string;
+    date: string;
+    createdAt: bigint;
+}
+export interface InstitutionalNewsInput {
+    institution: string;
+    headline: string;
+    summary: string;
+    currency: string;
+    sentiment: string;
+    date: string;
+}
+export interface SentimentSummary {
+    currency: string;
+    sentiment: string;
+    count: bigint;
 }
 export enum UserRole {
     admin = "admin",
@@ -150,13 +202,18 @@ export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createDrill(input: DrillInput): Promise<Drill>;
     createTrade(input: TradeInput): Promise<Trade>;
+    createInstitutionalNews(input: InstitutionalNewsInput): Promise<InstitutionalNews>;
     deleteDrill(id: string): Promise<boolean>;
     deleteTrade(id: string): Promise<boolean>;
+    deleteInstitutionalNews(id: string): Promise<boolean>;
     getAnalytics(): Promise<Analytics>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getDrillById(id: string): Promise<Drill | null>;
     getDrills(): Promise<Array<Drill>>;
+    getExtendedAnalytics(): Promise<ExtendedAnalytics>;
+    getInstitutionalNews(): Promise<Array<InstitutionalNews>>;
+    getInstitutionalSentimentSummary(): Promise<Array<SentimentSummary>>;
     getTradeById(id: string): Promise<Trade | null>;
     getTrades(): Promise<Array<Trade>>;
     getUniqueTags(): Promise<Array<string>>;

@@ -87,6 +87,8 @@ interface FormState {
   takeProfit: string;
   riskPercent: string;
   pnlPercent: string;
+  pnlDollar: string;
+  accountBalance: string;
   result: string;
   psychBefore: string[];
   psychDuring: string[];
@@ -121,6 +123,8 @@ const DEFAULT_FORM: FormState = {
   takeProfit: "",
   riskPercent: "1",
   pnlPercent: "",
+  pnlDollar: "",
+  accountBalance: "",
   result: "Win",
   psychBefore: [],
   psychDuring: [],
@@ -344,6 +348,9 @@ export default function TradeFormPage({
     formRef.current = form;
   }, [form]);
 
+  // Track which P&L field was last edited to prevent infinite sync loops
+  const lastPnlEdited = useRef<"percent" | "dollar" | null>(null);
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [customTag, setCustomTag] = useState("");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
@@ -370,6 +377,8 @@ export default function TradeFormPage({
         takeProfit: String(existingTrade.takeProfit),
         riskPercent: String(existingTrade.riskPercent),
         pnlPercent: String(existingTrade.pnlPercent),
+        pnlDollar: String(existingTrade.pnlDollar ?? 0),
+        accountBalance: String(existingTrade.accountBalance ?? 0),
         result: existingTrade.result,
         psychBefore: existingTrade.psychBefore,
         psychDuring: existingTrade.psychDuring,
@@ -424,6 +433,57 @@ export default function TradeFormPage({
     },
     [],
   );
+
+  // Synchronized P&L handlers
+  const handlePnlPercentChange = useCallback((value: string) => {
+    lastPnlEdited.current = "percent";
+    setForm((prev) => {
+      const pct = Number.parseFloat(value);
+      const bal = Number.parseFloat(prev.accountBalance);
+      const newDollar =
+        !Number.isNaN(pct) && !Number.isNaN(bal) && bal > 0
+          ? ((pct / 100) * bal).toFixed(2)
+          : prev.pnlDollar;
+      return { ...prev, pnlPercent: value, pnlDollar: newDollar };
+    });
+  }, []);
+
+  const handlePnlDollarChange = useCallback((value: string) => {
+    lastPnlEdited.current = "dollar";
+    setForm((prev) => {
+      const dollar = Number.parseFloat(value);
+      const bal = Number.parseFloat(prev.accountBalance);
+      const newPct =
+        !Number.isNaN(dollar) && !Number.isNaN(bal) && bal > 0
+          ? ((dollar / bal) * 100).toFixed(4)
+          : prev.pnlPercent;
+      return { ...prev, pnlDollar: value, pnlPercent: newPct };
+    });
+  }, []);
+
+  // Re-sync when account balance changes
+  const handleAccountBalanceChange = useCallback((value: string) => {
+    setForm((prev) => {
+      const bal = Number.parseFloat(value);
+      if (!Number.isNaN(bal) && bal > 0) {
+        if (lastPnlEdited.current === "percent") {
+          const pct = Number.parseFloat(prev.pnlPercent);
+          const newDollar = !Number.isNaN(pct)
+            ? ((pct / 100) * bal).toFixed(2)
+            : prev.pnlDollar;
+          return { ...prev, accountBalance: value, pnlDollar: newDollar };
+        }
+        if (lastPnlEdited.current === "dollar") {
+          const dollar = Number.parseFloat(prev.pnlDollar);
+          const newPct = !Number.isNaN(dollar)
+            ? ((dollar / bal) * 100).toFixed(4)
+            : prev.pnlPercent;
+          return { ...prev, accountBalance: value, pnlPercent: newPct };
+        }
+      }
+      return { ...prev, accountBalance: value };
+    });
+  }, []);
 
   // Auto-calculated values
   const calculatedRR = useMemo(() => {
@@ -523,6 +583,8 @@ export default function TradeFormPage({
       takeProfit: tp,
       riskPercent: risk,
       pnlPercent: pnl,
+      pnlDollar: Number.parseFloat(currentForm.pnlDollar) || 0,
+      accountBalance: Number.parseFloat(currentForm.accountBalance) || 0,
       result: currentForm.result,
       rrRatio,
       rMultiple,
@@ -866,6 +928,25 @@ export default function TradeFormPage({
               />
             </div>
 
+            {/* Account Balance */}
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Account Balance ($)
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder="10000"
+                value={form.accountBalance}
+                onChange={(e) => handleAccountBalanceChange(e.target.value)}
+                className="bg-muted border-border text-sm font-mono"
+                data-ocid="trade.form.account_balance.input"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Used to auto-calculate P&L $ ↔ P&L % conversions
+              </p>
+            </div>
+
             {/* Auto-calculated */}
             <div className="col-span-2 grid grid-cols-2 gap-3">
               <div className="bg-muted/50 rounded-md p-3 border border-border">
@@ -904,18 +985,54 @@ export default function TradeFormPage({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">
-                P&L % (actual)
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="3.00"
-                value={form.pnlPercent}
-                onChange={(e) => set("pnlPercent", e.target.value)}
-                className="bg-muted border-border text-sm font-mono"
-              />
+            {/* Synchronized P&L Fields */}
+            <div className="col-span-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span>P&L (actual) — synchronized fields</span>
+                <span className="text-teal opacity-60">↔</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">P&L %</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.00"
+                      value={form.pnlPercent}
+                      onChange={(e) => handlePnlPercentChange(e.target.value)}
+                      className="bg-muted border-border text-sm font-mono pr-7"
+                      data-ocid="trade.form.pnl_percent.input"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">P&L $</Label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={form.pnlDollar}
+                      onChange={(e) => handlePnlDollarChange(e.target.value)}
+                      className="bg-muted border-border text-sm font-mono pl-6"
+                      data-ocid="trade.form.pnl_dollar.input"
+                    />
+                  </div>
+                </div>
+              </div>
+              {(!form.accountBalance ||
+                Number.parseFloat(form.accountBalance) <= 0) && (
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+                  Enter Account Balance above to enable automatic sync
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Result *</Label>

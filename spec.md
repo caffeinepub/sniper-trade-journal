@@ -1,29 +1,33 @@
 # Sniper Trade Journal
 
 ## Current State
-Full trading journal app with Dashboard, Journal, New Trade, Calendar, Brutal Review, Mastery, and Admin Panel sections. Admin access currently requires entering a secret token via a hidden `#admin-setup` URL hash modal. The backend `_initializeAccessControlWithSecret` function requires a CAFFEINE_ADMIN_TOKEN environment variable to be matched.
+Full-stack trading journal app with: Dashboard, Journal, New Trade, Calendar, Brutal Review, Mastery (drills), Risk Calculator, Monte Carlo, Admin Panel. Backend in Motoko with trades, drills, analytics, admin CRUD. Frontend in React/TypeScript with dark/white themes.
 
 ## Requested Changes (Diff)
 
 ### Add
-- New backend function `_initializeAccessControl` (no token/secret required) — first caller becomes admin permanently, all subsequent callers become regular users
-- Auto-call `_initializeAccessControl` on sign-in (in frontend, immediately after actor is ready)
+- **InstitutionalIntelligencePage** — new full page under nav item "Institutional"
+- Backend type `InstitutionalNews` with fields: id, title, institution, headline, summary, currencyImpact (currency + direction Bullish/Bearish/Neutral), date, createdAt
+- Backend functions: `getInstitutionalNews()` (all users), `createInstitutionalNews(input)` (admin only), `deleteInstitutionalNews(id)` (admin only)
+- Seed realistic static data for 7 institutions (Goldman Sachs, JPMorgan Chase, Morgan Stanley, Citigroup, Bank of America, ECB, Federal Reserve)
+- Filter bar: by Currency (USD/EUR/GBP/JPY/AUD/CHF/NZD), by Institution dropdown, by Sentiment (Bullish/Bearish/Neutral)
+- News cards showing: Institution badge, Headline, Summary, Currency Impact badge (color-coded), Date, Archive indicator for older items
+- Search bar for keyword search across headlines/summaries
+- **Dashboard widget** "Institutional Sentiment" — compact preview card showing aggregated sentiment per major currency (USD/EUR/GBP/JPY), color-coded Bullish/Neutral/Bearish
+- Admin: "Add News" button visible only to admin to manually add new institutional intelligence items
 
 ### Modify
-- `access-control.mo`: Remove token comparison from `initialize()`. First non-anonymous caller who has not yet registered becomes admin. After admin is assigned, all future callers become regular users. Admin is locked forever — no reassignment possible.
-- `MixinAuthorization.mo`: Replace `_initializeAccessControlWithSecret(userSecret)` with `_initializeAccessControl()` (no argument, no env var lookup). Expose it as a public shared function.
-- `AppLayout.tsx`: Remove `HiddenAdminSetupModal` component entirely. Remove `#admin-setup` hash logic. Remove `onAdminGranted` prop and related admin token UI. Admin panel nav link remains but is only shown when `isAdmin === true`.
-- `App.tsx`: On actor ready + authenticated, auto-call `actor._initializeAccessControl()` instead of waiting for manual token entry. Check `isCallerAdmin()` right after to set `isAdmin` state.
+- `AppLayout.tsx` — add "Institutional" nav item with a Building2 icon
+- `App.tsx` — add `institutional` page routing
+- `DashboardPage.tsx` — add Institutional Sentiment preview widget
+- `AppPage` type — add `"institutional"` variant
 
 ### Remove
-- `HiddenAdminSetupModal` component and all its associated state
-- Admin token input, "Activate" button, and error/success states for token flow
-- `_initializeAccessControlWithSecret` backend function
-- Any reference to `CAFFEINE_ADMIN_TOKEN` environment variable in authorization logic
+- Nothing removed
 
 ## Implementation Plan
-1. Regenerate backend: `_initializeAccessControl()` public shared — no args, no token. First caller becomes admin, locked forever.
-2. Update `MixinAuthorization.mo` accordingly (via code generator).
-3. Update `App.tsx`: after actor is ready, call `_initializeAccessControl()` then `isCallerAdmin()` to set admin state.
-4. Update `AppLayout.tsx`: remove `HiddenAdminSetupModal`, remove `onAdminGranted` prop, remove token UI. Admin nav link only shown when `isAdmin === true`.
-5. Validate and deploy.
+1. Add `InstitutionalNews` type + CRUD backend functions to `main.mo`
+2. Regenerate `backend.d.ts` bindings
+3. Add `institutional` to `AppPage` type and routing in `App.tsx` and `AppLayout.tsx`
+4. Build `InstitutionalIntelligencePage.tsx` with news cards, filter bar, search, admin add form
+5. Add `InstitutionalSentimentWidget` to `DashboardPage.tsx`

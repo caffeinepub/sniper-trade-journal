@@ -7,8 +7,10 @@ import AdminPage from "@/pages/AdminPage";
 import CalendarPage from "@/pages/CalendarPage";
 import DashboardPage from "@/pages/DashboardPage";
 import DrillJournalPage from "@/pages/DrillJournalPage";
+import InstitutionalPage from "@/pages/InstitutionalPage";
 import JournalPage from "@/pages/JournalPage";
 import MasteryPage from "@/pages/MasteryPage";
+import MonteCarloPage from "@/pages/MonteCarloPage";
 import NewDrillPage from "@/pages/NewDrillPage";
 import ReviewPage from "@/pages/ReviewPage";
 import RiskCalculatorPage from "@/pages/RiskCalculatorPage";
@@ -177,6 +179,10 @@ export default function App() {
         )}
         {currentPage === "admin" && isAdmin && <AdminPage />}
         {currentPage === "risk-calculator" && <RiskCalculatorPage />}
+        {currentPage === "monte-carlo" && <MonteCarloPage />}
+        {currentPage === "institutional" && (
+          <InstitutionalPage isAdmin={isAdmin} />
+        )}
 
         <Toaster
           theme="dark"
