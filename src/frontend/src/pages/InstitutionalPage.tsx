@@ -29,6 +29,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Rss,
   Search,
   Trash2,
   TrendingDown,
@@ -40,6 +41,16 @@ import type { InstitutionalNews, InstitutionalNewsInput } from "../backend.d";
 
 interface InstitutionalPageProps {
   isAdmin?: boolean;
+}
+
+interface RssNewsItem {
+  id: string;
+  headline: string;
+  source: string;
+  summary: string;
+  url: string;
+  publishedDate: string;
+  institution: string;
 }
 
 const INSTITUTIONS = [
@@ -59,6 +70,49 @@ const INSTITUTIONS = [
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CHF", "NZD", "CAD"];
 const COMMODITIES = ["Gold", "Oil", "Silver"];
 const CRYPTO = ["Bitcoin", "Ethereum", "Solana"];
+
+const INSTITUTIONAL_KEYWORDS = [
+  "goldman sachs",
+  "jpmorgan",
+  "morgan stanley",
+  "citigroup",
+  "bank of america",
+  "federal reserve",
+  "ecb",
+  "european central bank",
+  "bank of england",
+  "bank of japan",
+];
+
+const KEYWORD_TO_INSTITUTION: Record<string, string> = {
+  "goldman sachs": "Goldman Sachs",
+  jpmorgan: "JPMorgan Chase",
+  "morgan stanley": "Morgan Stanley",
+  citigroup: "Citigroup",
+  "bank of america": "Bank of America",
+  "federal reserve": "Federal Reserve",
+  ecb: "European Central Bank",
+  "european central bank": "European Central Bank",
+  "bank of england": "Bank of England",
+  "bank of japan": "Bank of Japan",
+};
+
+const RSS_FEEDS = [
+  {
+    url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GS,JPM,MS,C,BAC&region=US&lang=en-US",
+    source: "Yahoo Finance",
+  },
+  {
+    url: "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
+    source: "MarketWatch",
+  },
+  {
+    url: "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+    source: "CNBC",
+  },
+];
+
+const CORS_PROXY = "https://api.allorigins.win/get?url=";
 
 // Category helpers
 function getMarketCategory(
@@ -136,7 +190,6 @@ function SentimentIcon({ sentiment }: { sentiment: string }) {
 }
 
 function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
-  // Compute dominant sentiment per major asset from recent 60 days
   const recentCutoff = Date.now() - 60 * 86400000;
   const recent = news.filter((n) => new Date(n.date).getTime() > recentCutoff);
 
@@ -450,6 +503,56 @@ function AddNewsModal({
   );
 }
 
+function detectInstitution(text: string): string {
+  const lower = text.toLowerCase();
+  for (const keyword of INSTITUTIONAL_KEYWORDS) {
+    if (lower.includes(keyword)) {
+      return KEYWORD_TO_INSTITUTION[keyword] ?? "";
+    }
+  }
+  return "";
+}
+
+async function fetchFeedItems(
+  feedUrl: string,
+  source: string,
+): Promise<RssNewsItem[]> {
+  const resp = await fetch(CORS_PROXY + encodeURIComponent(feedUrl));
+  const data = await resp.json();
+  const xmlStr: string = data.contents ?? "";
+  const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
+  const items = Array.from(doc.querySelectorAll("item"));
+  const results: RssNewsItem[] = [];
+  let index = 0;
+  for (const item of items) {
+    const title = item.querySelector("title")?.textContent?.trim() ?? "";
+    const rawDesc =
+      item.querySelector("description")?.textContent?.trim() ?? "";
+    const description = rawDesc.replace(/<[^>]*>/g, "");
+    const link = item.querySelector("link")?.textContent?.trim() ?? "";
+    const pubDate = item.querySelector("pubDate")?.textContent?.trim() ?? "";
+
+    if (!title || !link) continue;
+
+    const combined = `${title} ${description}`.toLowerCase();
+    const matches = INSTITUTIONAL_KEYWORDS.some((kw) => combined.includes(kw));
+    if (!matches) continue;
+
+    const institution = detectInstitution(`${title} ${description}`);
+    results.push({
+      id: `rss_${source}_${index}`,
+      headline: title,
+      source,
+      summary: description.slice(0, 300),
+      url: link,
+      publishedDate: pubDate,
+      institution,
+    });
+    index++;
+  }
+  return results;
+}
+
 export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const { actor, isFetching: actorFetching } = useActor();
   const [news, setNews] = useState<InstitutionalNews[]>([]);
@@ -457,6 +560,8 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("all");
+  const [rssNews, setRssNews] = useState<RssNewsItem[]>([]);
+  const [rssFetching, setRssFetching] = useState(false);
 
   // Filters
   const [filterMarket, setFilterMarket] = useState("all");
@@ -476,16 +581,48 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     }
   }, [actor]);
 
+  const fetchRssNews = useCallback(async () => {
+    setRssFetching(true);
+    try {
+      const allItems: RssNewsItem[] = [];
+      await Promise.all(
+        RSS_FEEDS.map(async ({ url, source }) => {
+          try {
+            const items = await fetchFeedItems(url, source);
+            allItems.push(...items);
+          } catch (err) {
+            console.error(`RSS feed failed [${source}]:`, err);
+          }
+        }),
+      );
+      // Deduplicate by URL
+      const seen = new Set<string>();
+      const unique = allItems.filter((item) => {
+        if (seen.has(item.url)) return false;
+        seen.add(item.url);
+        return true;
+      });
+      // Re-assign stable ids after dedup
+      const withIds = unique.map((item, i) => ({ ...item, id: `rss_${i}` }));
+      setRssNews(withIds);
+    } catch (err) {
+      console.error("RSS fetch failed:", err);
+      setRssNews([]);
+    } finally {
+      setRssFetching(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!actor || actorFetching) return;
     setLoading(true);
-    fetchNews().finally(() => setLoading(false));
-  }, [actor, actorFetching, fetchNews]);
+    Promise.all([fetchNews(), fetchRssNews()]).finally(() => setLoading(false));
+  }, [actor, actorFetching, fetchNews, fetchRssNews]);
 
   const handleRefresh = async () => {
     if (!actor) return;
     setRefreshing(true);
-    await fetchNews();
+    await Promise.all([fetchNews(), fetchRssNews()]);
     setRefreshing(false);
     toast.success("News refreshed");
   };
@@ -515,7 +652,6 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
 
   const filtered = useMemo(() => {
     return news.filter((item) => {
-      // Tab filter
       if (
         activeTab === "currencies" &&
         getMarketCategory(item.currency) !== "currency"
@@ -571,9 +707,40 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     [filtered],
   );
 
+  // Combined display: backend sorted items + RSS items (RSS shown in "all" tab only)
+  const combinedItems = useMemo(() => {
+    if (activeTab !== "all") {
+      // Only show backend items for non-all tabs
+      return { backend: sorted, rss: [] };
+    }
+    // In "all" tab, merge and sort all by date
+    const backendItems = sorted.map((item) => ({
+      type: "backend" as const,
+      date: new Date(item.date).getTime(),
+      item,
+    }));
+    const rssItems = rssNews.map((item) => ({
+      type: "rss" as const,
+      date: item.publishedDate ? new Date(item.publishedDate).getTime() : 0,
+      item,
+    }));
+    const merged = [...backendItems, ...rssItems].sort(
+      (a, b) => b.date - a.date,
+    );
+    return {
+      backend: merged
+        .filter((m) => m.type === "backend")
+        .map((m) => m.item as InstitutionalNews),
+      rss: merged
+        .filter((m) => m.type === "rss")
+        .map((m) => m.item as RssNewsItem),
+      merged,
+    };
+  }, [sorted, rssNews, activeTab]);
+
   const tabCounts = useMemo(
     () => ({
-      all: news.filter((n) => !isArchived(n.date)).length,
+      all: news.filter((n) => !isArchived(n.date)).length + rssNews.length,
       currencies: news.filter(
         (n) =>
           getMarketCategory(n.currency) === "currency" && !isArchived(n.date),
@@ -588,7 +755,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       ).length,
       archive: news.filter((n) => isArchived(n.date)).length,
     }),
-    [news],
+    [news, rssNews],
   );
 
   const TABS: { key: TabType; label: string }[] = [
@@ -598,6 +765,14 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     { key: "crypto", label: "Crypto" },
     { key: "archive", label: "Archive" },
   ];
+
+  const totalDisplayCount =
+    activeTab === "all" ? sorted.length + rssNews.length : sorted.length;
+
+  const isEmpty =
+    !loading &&
+    sorted.length === 0 &&
+    (activeTab !== "all" || rssNews.length === 0);
 
   return (
     <div className="space-y-6">
@@ -625,9 +800,11 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             data-ocid="institutional.refresh.button"
           >
             <RefreshCw
-              className={`h-4 w-4 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+              className={`h-4 w-4 mr-1.5 ${
+                refreshing || rssFetching ? "animate-spin" : ""
+              }`}
             />
-            {refreshing ? "Refreshing..." : "Refresh"}
+            {refreshing ? "Refreshing..." : "Refresh News"}
           </Button>
           {isAdmin && (
             <Button
@@ -645,6 +822,17 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
 
       {/* Sentiment Strip */}
       {!loading && news.length > 0 && <SentimentStrip news={news} />}
+
+      {/* RSS fetch status */}
+      {rssFetching && !loading && (
+        <div
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+          data-ocid="institutional.rss.loading_state"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Fetching live RSS feeds...</span>
+        </div>
+      )}
 
       {/* Category Tabs */}
       <div
@@ -772,7 +960,11 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       {/* Results count */}
       {!loading && (
         <p className="text-xs text-muted-foreground">
-          Showing {sorted.length} of {news.length} reports
+          Showing {totalDisplayCount} report
+          {totalDisplayCount !== 1 ? "s" : ""}
+          {activeTab === "all" && rssNews.length > 0
+            ? ` (${sorted.length} curated + ${rssNews.length} live RSS)`
+            : ""}
           {(filterMarket !== "all" ||
             filterInstitution !== "all" ||
             filterSentiment !== "all" ||
@@ -793,16 +985,18 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             <NewsCardSkeleton key={k} />
           ))}
         </div>
-      ) : sorted.length === 0 ? (
+      ) : isEmpty ? (
         <div
           data-ocid="institutional.empty_state"
           className="flex flex-col items-center justify-center gap-3 py-16 text-center border border-dashed border-border rounded-xl"
         >
           <Building2 className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-muted-foreground font-medium">No reports found</p>
+          <p className="text-muted-foreground font-medium">
+            No institutional news available at the moment.
+          </p>
           <p className="text-xs text-muted-foreground/60">
-            {news.length === 0
-              ? "No institutional reports have been added yet."
+            {news.length === 0 && rssNews.length === 0
+              ? "No institutional reports found. Try refreshing to fetch the latest news."
               : activeTab === "archive"
                 ? "No archived reports. Items older than 30 days appear here."
                 : "Try adjusting your filters or search query."}
@@ -810,84 +1004,237 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sorted.map((item, idx) => {
-            const archived = isArchived(item.date);
-            const cat = getMarketCategory(item.currency);
-            const instColor =
-              INSTITUTION_COLORS[item.institution] ??
-              "bg-muted text-muted-foreground border-border";
-            const sentColor =
-              SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
-            const mktColor = MARKET_TAG_STYLES[cat];
-            return (
-              <Card
-                key={item.id}
-                className="bg-card border-border hover:border-teal/40 transition-colors group"
-                data-ocid={`institutional.item.${idx + 1}`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge
-                        variant="outline"
-                        className={`text-xs border ${instColor}`}
-                      >
-                        {item.institution}
-                      </Badge>
-                      {archived && (
+          {/* Backend items (non-all tabs show only these) */}
+          {activeTab !== "all"
+            ? sorted.map((item, idx) => {
+                const archived = isArchived(item.date);
+                const cat = getMarketCategory(item.currency);
+                const instColor =
+                  INSTITUTION_COLORS[item.institution] ??
+                  "bg-muted text-muted-foreground border-border";
+                const sentColor =
+                  SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
+                const mktColor = MARKET_TAG_STYLES[cat];
+                return (
+                  <Card
+                    key={item.id}
+                    className="bg-card border-border hover:border-teal/40 transition-colors group"
+                    data-ocid={`institutional.item.${idx + 1}`}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge
+                            variant="outline"
+                            className={`text-xs border ${instColor}`}
+                          >
+                            {item.institution}
+                          </Badge>
+                          {archived && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
+                            >
+                              <Archive className="h-3 w-3 mr-1" />
+                              Archive
+                            </Badge>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
+                            onClick={() => handleDelete(item.id)}
+                            data-ocid={`institutional.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
+                        {item.headline}
+                      </h3>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                        {item.summary}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1.5 flex-wrap">
+                          <Badge
+                            variant="outline"
+                            className={`text-xs border ${mktColor}`}
+                          >
+                            {item.currency}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs border ${sentColor} flex items-center gap-1`}
+                          >
+                            <SentimentIcon sentiment={item.sentiment} />
+                            {item.sentiment}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground/60">
+                          {item.date}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            : /* All tab: merged backend + RSS */
+              combinedItems.merged?.map((entry, idx) => {
+                if (entry.type === "backend") {
+                  const item = entry.item as InstitutionalNews;
+                  const archived = isArchived(item.date);
+                  const cat = getMarketCategory(item.currency);
+                  const instColor =
+                    INSTITUTION_COLORS[item.institution] ??
+                    "bg-muted text-muted-foreground border-border";
+                  const sentColor =
+                    SENTIMENT_STYLES[item.sentiment] ??
+                    SENTIMENT_STYLES.Neutral;
+                  const mktColor = MARKET_TAG_STYLES[cat];
+                  return (
+                    <Card
+                      key={item.id}
+                      className="bg-card border-border hover:border-teal/40 transition-colors group"
+                      data-ocid={`institutional.item.${idx + 1}`}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs border ${instColor}`}
+                            >
+                              {item.institution}
+                            </Badge>
+                            {archived && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
+                              >
+                                <Archive className="h-3 w-3 mr-1" />
+                                Archive
+                              </Badge>
+                            )}
+                          </div>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
+                              onClick={() => handleDelete(item.id)}
+                              data-ocid={`institutional.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
+                          {item.headline}
+                        </h3>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                          {item.summary}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex gap-1.5 flex-wrap">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs border ${mktColor}`}
+                            >
+                              {item.currency}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs border ${sentColor} flex items-center gap-1`}
+                            >
+                              <SentimentIcon sentiment={item.sentiment} />
+                              {item.sentiment}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground/60">
+                            {item.date}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                // RSS item
+                const rssItem = entry.item as RssNewsItem;
+                const instColor =
+                  rssItem.institution && INSTITUTION_COLORS[rssItem.institution]
+                    ? INSTITUTION_COLORS[rssItem.institution]
+                    : "bg-muted text-muted-foreground border-border";
+                const pubDateStr = rssItem.publishedDate
+                  ? new Date(rssItem.publishedDate).toLocaleDateString(
+                      "en-US",
+                      {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      },
+                    )
+                  : "";
+                return (
+                  <Card
+                    key={rssItem.id}
+                    className="bg-card border-border hover:border-teal/40 transition-colors"
+                    data-ocid={`institutional.item.${idx + 1}`}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {rssItem.institution && (
+                          <Badge
+                            variant="outline"
+                            className={`text-xs border ${instColor}`}
+                          >
+                            {rssItem.institution}
+                          </Badge>
+                        )}
                         <Badge
                           variant="outline"
-                          className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
+                          className="text-xs border border-teal/40 text-teal flex items-center gap-1"
                         >
-                          <Archive className="h-3 w-3 mr-1" />
-                          Archive
+                          <Rss className="h-3 w-3" />
+                          RSS
                         </Badge>
+                      </div>
+                      <a
+                        href={rssItem.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold text-foreground hover:text-teal cursor-pointer line-clamp-2 block"
+                      >
+                        {rssItem.headline}
+                      </a>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {rssItem.summary && (
+                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                          {rssItem.summary}
+                        </p>
                       )}
-                    </div>
-                    {isAdmin && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
-                        onClick={() => handleDelete(item.id)}
-                        data-ocid={`institutional.delete_button.${idx + 1}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
-                    {item.headline}
-                  </h3>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                    {item.summary}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Badge
-                        variant="outline"
-                        className={`text-xs border ${mktColor}`}
-                      >
-                        {item.currency}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs border ${sentColor} flex items-center gap-1`}
-                      >
-                        <SentimentIcon sentiment={item.sentiment} />
-                        {item.sentiment}
-                      </Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground/60">
-                      {item.date}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          {rssItem.source}
+                        </span>
+                        {pubDateStr && (
+                          <span className="text-xs text-muted-foreground/60">
+                            {pubDateStr}
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
         </div>
       )}
 
