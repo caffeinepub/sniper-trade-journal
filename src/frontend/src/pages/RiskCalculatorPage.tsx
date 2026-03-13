@@ -13,229 +13,111 @@ import {
 import { useMemo, useState } from "react";
 
 // ──────────────────────────────────────────────
-// Trading pair groups
+// Base pip value table (pip value when position size = $100)
 // ──────────────────────────────────────────────
-const PAIR_GROUPS = [
-  {
-    label: "Forex",
-    pairs: [
-      "EURUSD",
-      "GBPUSD",
-      "USDJPY",
-      "AUDUSD",
-      "USDCAD",
-      "USDCHF",
-      "NZDUSD",
-      "EURJPY",
-      "GBPJPY",
-      "EURGBP",
-      "AUDJPY",
-      "CADJPY",
-      "EURAUD",
-      "GBPAUD",
-      "AUDNZD",
-      "EURNZD",
-      "GBPNZD",
-      "CHFJPY",
-      "EURCAD",
-      "GBPCAD",
-      "AUDCAD",
-      "NZDCAD",
-      "NZDJPY",
-      "AUDCHF",
-      "GBPCHF",
-      "EURCHF",
-      "CADCHF",
-      "NZDCHF",
-    ],
-  },
-  {
-    label: "Metals",
-    pairs: ["XAUUSD"],
-  },
-  {
-    label: "Crypto",
-    pairs: [
-      "BTCUSD",
-      "ETHUSD",
-      "SOLUSD",
-      "BNBUSD",
-      "XRPUSD",
-      "ADAUSD",
-      "DOTUSD",
-      "MATICUSD",
-    ],
-  },
-] as const;
+const BASE_PIP_VALUES: Record<string, number> = {
+  USDJPY: 0.7,
+  GBPUSD: 0.7,
+  EURUSD: 0.9,
+  XAUUSD: 0.001,
+  BTCUSD: 0.1,
+  ETHUSD: 0.5,
+};
 
-// ──────────────────────────────────────────────
-// Asset type detection
-// ──────────────────────────────────────────────
-type AssetType = "forex" | "jpy-forex" | "gold" | "crypto";
-
-const CRYPTO_PREFIXES = [
-  "BTC",
-  "ETH",
-  "SOL",
-  "BNB",
-  "XRP",
-  "ADA",
-  "DOT",
-  "MATIC",
+const INSTRUMENTS = [
+  { value: "EURUSD", label: "EURUSD — Euro / US Dollar" },
+  { value: "GBPUSD", label: "GBPUSD — British Pound / US Dollar" },
+  { value: "USDJPY", label: "USDJPY — US Dollar / Japanese Yen" },
+  { value: "XAUUSD", label: "XAUUSD — Gold / US Dollar" },
+  { value: "BTCUSD", label: "BTCUSD — Bitcoin / US Dollar" },
+  { value: "ETHUSD", label: "ETHUSD — Ethereum / US Dollar" },
 ];
-
-function detectAssetType(pair: string): AssetType {
-  if (pair === "XAUUSD") return "gold";
-  if (CRYPTO_PREFIXES.some((p) => pair.startsWith(p))) return "crypto";
-  if (pair.includes("JPY")) return "jpy-forex";
-  return "forex";
-}
 
 // ──────────────────────────────────────────────
 // Calculation logic
 // ──────────────────────────────────────────────
 interface CalcInputs {
-  accountBalance: number;
-  riskPercent: number;
-  pair: string;
+  instrument: string;
+  positionSize: number; // dollar amount used in trade
   entryPrice: number;
   stopLossPrice: number;
   takeProfitPrice: number;
 }
 
 interface CalcResults {
-  riskAmount: number;
-  stopLossDistancePips: number;
-  takeProfitDistancePips: number;
-  pipValue: number;
-  lotSize: number;
-  positionSizeUnits: number;
+  basePipValue: number;
+  pipValue: number; // scaled by position size
+  stopLossPips: number;
+  takeProfitPips: number;
+  potentialLoss: number;
   potentialProfit: number;
-  riskRewardRatio: number;
-  assetType: AssetType;
+  rewardToRisk: number;
   valid: boolean;
   tpValid: boolean;
 }
 
 function calculate(inputs: CalcInputs): CalcResults {
   const {
-    accountBalance,
-    riskPercent,
-    pair,
+    instrument,
+    positionSize,
     entryPrice,
     stopLossPrice,
     takeProfitPrice,
   } = inputs;
-  const assetType = detectAssetType(pair);
 
-  // Validate core required inputs
+  const empty: CalcResults = {
+    basePipValue: BASE_PIP_VALUES[instrument] ?? 0,
+    pipValue: 0,
+    stopLossPips: 0,
+    takeProfitPips: 0,
+    potentialLoss: 0,
+    potentialProfit: 0,
+    rewardToRisk: 0,
+    valid: false,
+    tpValid: false,
+  };
+
   if (
-    !accountBalance ||
-    !riskPercent ||
+    !positionSize ||
+    positionSize <= 0 ||
     !entryPrice ||
-    !stopLossPrice ||
-    accountBalance <= 0 ||
-    riskPercent <= 0 ||
     entryPrice <= 0 ||
+    !stopLossPrice ||
     stopLossPrice <= 0 ||
     entryPrice === stopLossPrice
   ) {
-    return {
-      riskAmount: 0,
-      stopLossDistancePips: 0,
-      takeProfitDistancePips: 0,
-      pipValue: 0,
-      lotSize: 0,
-      positionSizeUnits: 0,
-      potentialProfit: 0,
-      riskRewardRatio: 0,
-      assetType,
-      valid: false,
-      tpValid: false,
-    };
+    return empty;
   }
 
-  // Pip size based on asset type
-  const pipSize =
-    assetType === "gold"
-      ? 0.01
-      : assetType === "jpy-forex"
-        ? 0.01
-        : assetType === "crypto"
-          ? 1
-          : 0.0001;
+  const basePipValue = BASE_PIP_VALUES[instrument] ?? 0;
 
-  // Stop loss distance in pips
-  const stopLossDistancePips = Math.abs(entryPrice - stopLossPrice) / pipSize;
+  // Dynamic pip value scaled by position size
+  // Formula: Pip Value = Base Pip Value × (Position Size ÷ 100)
+  const pipValue = basePipValue * (positionSize / 100);
 
-  // Risk amount
-  const riskAmount = accountBalance * (riskPercent / 100);
+  // Stop loss distance: |Entry - SL|
+  const stopLossPips = Math.abs(entryPrice - stopLossPrice);
 
-  // Pip value per standard lot
-  const pipValue =
-    assetType === "gold" ? 1 : assetType === "crypto" ? entryPrice : 10;
-
-  // TP calculations
+  // Take profit distance: |TP - Entry|
   const tpValid = takeProfitPrice > 0 && takeProfitPrice !== entryPrice;
+  const takeProfitPips = tpValid ? Math.abs(takeProfitPrice - entryPrice) : 0;
 
-  const takeProfitDistancePips = tpValid
-    ? Math.abs(entryPrice - takeProfitPrice) / pipSize
-    : 0;
+  // P&L calculations
+  const potentialLoss = pipValue * stopLossPips;
+  const potentialProfit = tpValid ? pipValue * takeProfitPips : 0;
 
-  if (assetType === "crypto") {
-    const positionSizeUnits = riskAmount / Math.abs(entryPrice - stopLossPrice);
-
-    const potentialProfit = tpValid
-      ? positionSizeUnits * Math.abs(entryPrice - takeProfitPrice)
-      : 0;
-
-    const riskRewardRatio =
-      tpValid && stopLossDistancePips > 0
-        ? takeProfitDistancePips / stopLossDistancePips
-        : 0;
-
-    return {
-      riskAmount,
-      stopLossDistancePips,
-      takeProfitDistancePips,
-      pipValue: 0,
-      lotSize: 0,
-      positionSizeUnits,
-      potentialProfit,
-      riskRewardRatio,
-      assetType,
-      valid: true,
-      tpValid,
-    };
-  }
-
-  // Forex / Gold lot size
-  const lotSize = riskAmount / (stopLossDistancePips * pipValue);
-
-  // Position size in units
-  const positionSizeUnits =
-    assetType === "gold" ? lotSize * 100 : lotSize * 100000;
-
-  // TP profit: tpPips × pipValue × lotSize
-  const potentialProfit = tpValid
-    ? takeProfitDistancePips * pipValue * lotSize
-    : 0;
-
-  const riskRewardRatio =
-    tpValid && stopLossDistancePips > 0
-      ? takeProfitDistancePips / stopLossDistancePips
-      : 0;
+  // RR = TP Pips ÷ SL Pips
+  const rewardToRisk =
+    tpValid && stopLossPips > 0 ? takeProfitPips / stopLossPips : 0;
 
   return {
-    riskAmount,
-    stopLossDistancePips,
-    takeProfitDistancePips,
+    basePipValue,
     pipValue,
-    lotSize,
-    positionSizeUnits,
+    stopLossPips,
+    takeProfitPips,
+    potentialLoss,
     potentialProfit,
-    riskRewardRatio,
-    assetType,
+    rewardToRisk,
     valid: true,
     tpValid,
   };
@@ -244,28 +126,21 @@ function calculate(inputs: CalcInputs): CalcResults {
 // ──────────────────────────────────────────────
 // Formatting helpers
 // ──────────────────────────────────────────────
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmtMoney(n: number, decimals = 4): string {
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: decimals })}`;
 }
 
 function fmtPips(n: number): string {
-  return `${n.toFixed(1)} pips`;
+  // Show enough decimals for small values (e.g. EURUSD = 0.0050)
+  if (n < 0.01) return n.toFixed(6);
+  if (n < 1) return n.toFixed(4);
+  return n.toFixed(2);
 }
 
 function fmtPipValue(n: number): string {
-  return `$${n.toFixed(2)} per lot`;
-}
-
-function fmtLots(n: number): string {
-  return `${n.toFixed(2)} lots`;
-}
-
-function fmtUnits(n: number, assetType: AssetType, pair: string): string {
-  if (assetType === "crypto") {
-    const base = pair.replace("USD", "");
-    return `${n.toFixed(4)} ${base}`;
-  }
-  return `${Math.round(n).toLocaleString("en-US")} units`;
+  if (n < 0.001) return `$${n.toFixed(6)} per pip`;
+  if (n < 0.01) return `$${n.toFixed(5)} per pip`;
+  return `$${n.toFixed(4)} per pip`;
 }
 
 // ──────────────────────────────────────────────
@@ -274,21 +149,23 @@ function fmtUnits(n: number, assetType: AssetType, pair: string): string {
 interface ResultCardProps {
   label: string;
   value: string;
+  sub?: string;
   highlight?: boolean;
-  warning?: boolean;
   positive?: boolean;
   negative?: boolean;
   accent?: boolean;
+  neutral?: boolean;
 }
 
 function ResultCard({
   label,
   value,
+  sub,
   highlight,
-  warning,
   positive,
   negative,
   accent,
+  neutral,
 }: ResultCardProps) {
   return (
     <div
@@ -296,14 +173,14 @@ function ResultCard({
         "rounded-xl p-4 border transition-all",
         highlight
           ? "bg-teal/5 border-teal/20"
-          : warning
-            ? "bg-amber-500/5 border-amber-500/20"
-            : positive
-              ? "bg-emerald-500/5 border-emerald-500/20"
-              : negative
-                ? "bg-red-500/5 border-red-500/20"
-                : accent
-                  ? "bg-violet-500/5 border-violet-500/20"
+          : positive
+            ? "bg-emerald-500/5 border-emerald-500/20"
+            : negative
+              ? "bg-red-500/5 border-red-500/20"
+              : accent
+                ? "bg-violet-500/5 border-violet-500/20"
+                : neutral
+                  ? "bg-blue-500/5 border-blue-500/20"
                   : "bg-card border-border",
       )}
     >
@@ -315,26 +192,24 @@ function ResultCard({
           "text-2xl font-mono font-bold tabular-nums",
           highlight
             ? "text-teal"
-            : warning
-              ? "text-amber-400"
-              : positive
-                ? "text-emerald-400"
-                : negative
-                  ? "text-red-400"
-                  : accent
-                    ? "text-violet-400"
+            : positive
+              ? "text-emerald-400"
+              : negative
+                ? "text-red-400"
+                : accent
+                  ? "text-violet-400"
+                  : neutral
+                    ? "text-blue-400"
                     : "text-foreground",
         )}
       >
         {value}
       </p>
+      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
     </div>
   );
 }
 
-// ──────────────────────────────────────────────
-// Section divider inside results
-// ──────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="sm:col-span-2 flex items-center gap-2 pt-2 first:pt-0">
@@ -346,16 +221,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ──────────────────────────────────────────────
-// Styled input field wrapper
-// ──────────────────────────────────────────────
-interface FieldProps {
-  label: string;
-  id: string;
-  children: React.ReactNode;
-}
-
-function Field({ label, id, children }: FieldProps) {
+function Field({
+  label,
+  id,
+  children,
+}: { label: string; id: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="text-sm text-foreground font-medium">
@@ -373,39 +243,35 @@ export default function RiskCalculatorPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  const [accountBalance, setAccountBalance] = useState("");
-  const [riskPercent, setRiskPercent] = useState("");
-  const [pair, setPair] = useState("EURUSD");
+  const [instrument, setInstrument] = useState("EURUSD");
+  const [positionSize, setPositionSize] = useState("");
   const [entryPrice, setEntryPrice] = useState("");
   const [stopLossPrice, setStopLossPrice] = useState("");
   const [takeProfitPrice, setTakeProfitPrice] = useState("");
 
   const results = useMemo(() => {
     return calculate({
-      accountBalance: Number.parseFloat(accountBalance) || 0,
-      riskPercent: Number.parseFloat(riskPercent) || 0,
-      pair,
+      instrument,
+      positionSize: Number.parseFloat(positionSize) || 0,
       entryPrice: Number.parseFloat(entryPrice) || 0,
       stopLossPrice: Number.parseFloat(stopLossPrice) || 0,
       takeProfitPrice: Number.parseFloat(takeProfitPrice) || 0,
     });
-  }, [
-    accountBalance,
-    riskPercent,
-    pair,
-    entryPrice,
-    stopLossPrice,
-    takeProfitPrice,
-  ]);
+  }, [instrument, positionSize, entryPrice, stopLossPrice, takeProfitPrice]);
 
-  const riskPctNum = Number.parseFloat(riskPercent) || 0;
-  const showWarning = riskPctNum > 3 && !Number.isNaN(riskPctNum);
-
-  // Format RR ratio as "1 : X.X"
   const rrLabel =
-    results.tpValid && results.riskRewardRatio > 0
-      ? `1 : ${results.riskRewardRatio.toFixed(1)}`
+    results.tpValid && results.rewardToRisk > 0
+      ? `1 : ${results.rewardToRisk.toFixed(2)}`
       : "—";
+
+  const selectStyle = {
+    backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+    color: isDark ? "#e2e8f0" : "#0f172a",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat" as const,
+    backgroundPosition: "right 10px center",
+    paddingRight: "36px",
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto animate-fade-in">
@@ -420,28 +286,33 @@ export default function RiskCalculatorPage() {
           </h1>
         </div>
         <p className="text-sm text-muted-foreground ml-12">
-          Calculate your position size and profit potential based on risk
-          management rules
+          Pip values scale dynamically based on your position size
         </p>
       </div>
 
-      {/* Risk warning banner */}
-      {showWarning && (
-        <div
-          data-ocid="risk_calc.risk_warning.toast"
-          className="mb-5 flex items-start gap-3 rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium"
-          role="alert"
-          aria-live="polite"
-        >
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>
-            ⚠ Warning: You are risking more than 3% of your account. Consider
-            reducing your risk to protect your capital.
-          </span>
+      {/* Base pip value reference strip */}
+      <div className="mb-5 rounded-xl bg-card border border-border px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+          Base Pip Values (per $100 position)
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(BASE_PIP_VALUES).map(([sym, val]) => (
+            <span
+              key={sym}
+              className={cn(
+                "text-xs font-mono px-2.5 py-1 rounded-md border transition-colors",
+                instrument === sym
+                  ? "bg-teal/10 border-teal/30 text-teal font-bold"
+                  : "bg-muted/30 border-border text-muted-foreground",
+              )}
+            >
+              {sym} = ${val}
+            </span>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Two-column layout: inputs | results */}
+      {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* ── LEFT: Inputs ── */}
         <Card className="bg-card border-border">
@@ -452,93 +323,63 @@ export default function RiskCalculatorPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Account Balance */}
-            <Field label="Account Balance" id="account-balance">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">
-                  $
-                </span>
-                <Input
-                  id="account-balance"
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="5000"
-                  value={accountBalance}
-                  onChange={(e) => setAccountBalance(e.target.value)}
-                  className="pl-7 bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
-                  data-ocid="risk_calc.balance.input"
-                />
-              </div>
-            </Field>
-
-            {/* Risk Percentage */}
-            <Field label="Risk Percentage" id="risk-percent">
-              <div className="relative">
-                <Input
-                  id="risk-percent"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="any"
-                  placeholder="1"
-                  value={riskPercent}
-                  onChange={(e) => setRiskPercent(e.target.value)}
-                  className="pr-9 bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
-                  data-ocid="risk_calc.risk_pct.input"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">
-                  %
-                </span>
-              </div>
-            </Field>
-
-            {/* Trading Pair */}
-            <Field label="Trading Pair" id="trading-pair">
+            {/* Instrument Selector */}
+            <Field label="Trading Instrument" id="instrument">
               <select
-                id="trading-pair"
-                value={pair}
-                onChange={(e) => setPair(e.target.value)}
-                data-ocid="risk_calc.pair.select"
-                className={cn(
-                  "w-full h-10 rounded-md border border-border px-3 py-2",
-                  "text-sm font-mono appearance-none cursor-pointer",
-                  "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0",
-                  "transition-colors",
-                )}
-                style={{
-                  backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-                  color: isDark ? "#e2e8f0" : "#0f172a",
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 10px center",
-                  paddingRight: "36px",
-                }}
+                id="instrument"
+                value={instrument}
+                onChange={(e) => setInstrument(e.target.value)}
+                data-ocid="risk_calc.instrument.select"
+                className="w-full h-10 rounded-md border border-border px-3 py-2 text-sm font-mono appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+                style={selectStyle}
               >
-                {PAIR_GROUPS.map((group) => (
-                  <optgroup
-                    key={group.label}
-                    label={group.label}
+                {INSTRUMENTS.map((ins) => (
+                  <option
+                    key={ins.value}
+                    value={ins.value}
                     style={{
                       backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
                       color: isDark ? "#e2e8f0" : "#0f172a",
                     }}
                   >
-                    {group.pairs.map((p) => (
-                      <option
-                        key={p}
-                        value={p}
-                        style={{
-                          backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-                          color: isDark ? "#e2e8f0" : "#0f172a",
-                        }}
-                      >
-                        {p}
-                      </option>
-                    ))}
-                  </optgroup>
+                    {ins.label}
+                  </option>
                 ))}
               </select>
+            </Field>
+
+            {/* Position Size */}
+            <Field label="Position Size ($)" id="position-size">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">
+                  $
+                </span>
+                <Input
+                  id="position-size"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="100"
+                  value={positionSize}
+                  onChange={(e) => setPositionSize(e.target.value)}
+                  className="pl-7 bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
+                  data-ocid="risk_calc.position_size.input"
+                />
+              </div>
+              {/* Live pip value preview */}
+              {Number.parseFloat(positionSize) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1 font-mono">
+                  Pip Value ={" "}
+                  <span className="text-teal font-semibold">
+                    $
+                    {(
+                      BASE_PIP_VALUES[instrument] *
+                      (Number.parseFloat(positionSize) / 100)
+                    ).toFixed(6)}
+                  </span>{" "}
+                  &nbsp;({BASE_PIP_VALUES[instrument]} × {positionSize} ÷ 100)
+                </p>
+              )}
             </Field>
 
             {/* Entry Price */}
@@ -548,7 +389,7 @@ export default function RiskCalculatorPage() {
                 type="number"
                 min="0"
                 step="any"
-                placeholder="1.1050"
+                placeholder="1.10500"
                 value={entryPrice}
                 onChange={(e) => setEntryPrice(e.target.value)}
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
@@ -556,8 +397,8 @@ export default function RiskCalculatorPage() {
               />
             </Field>
 
-            {/* Stop Loss Price */}
-            <Field label="Stop Loss Price" id="stop-loss">
+            {/* Stop Loss */}
+            <Field label="Stop Loss" id="stop-loss">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                   <TrendingDown className="w-3.5 h-3.5 text-red-400/60" />
@@ -567,7 +408,7 @@ export default function RiskCalculatorPage() {
                   type="number"
                   min="0"
                   step="any"
-                  placeholder="1.1000"
+                  placeholder="1.10000"
                   value={stopLossPrice}
                   onChange={(e) => setStopLossPrice(e.target.value)}
                   className="pl-8 bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
@@ -576,8 +417,8 @@ export default function RiskCalculatorPage() {
               </div>
             </Field>
 
-            {/* Take Profit Price */}
-            <Field label="Take Profit Price (TP)" id="take-profit">
+            {/* Take Profit */}
+            <Field label="Take Profit" id="take-profit">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-400/60" />
@@ -587,7 +428,7 @@ export default function RiskCalculatorPage() {
                   type="number"
                   min="0"
                   step="any"
-                  placeholder="1.1100"
+                  placeholder="1.11000"
                   value={takeProfitPrice}
                   onChange={(e) => setTakeProfitPrice(e.target.value)}
                   className="pl-8 bg-input border-border text-foreground placeholder:text-muted-foreground/50 font-mono"
@@ -604,7 +445,7 @@ export default function RiskCalculatorPage() {
                     SL Distance
                   </span>
                   <span className="text-sm font-mono font-semibold text-red-400">
-                    {results.stopLossDistancePips.toFixed(1)} pips
+                    {fmtPips(results.stopLossPips)}
                   </span>
                 </div>
                 {results.tpValid && (
@@ -613,7 +454,7 @@ export default function RiskCalculatorPage() {
                       TP Distance
                     </span>
                     <span className="text-sm font-mono font-semibold text-emerald-400">
-                      {results.takeProfitDistancePips.toFixed(1)} pips
+                      {fmtPips(results.takeProfitPips)}
                     </span>
                   </div>
                 )}
@@ -639,90 +480,109 @@ export default function RiskCalculatorPage() {
                 <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
                   <Calculator className="w-5 h-5 text-muted-foreground" />
                 </div>
-                <p className="text-sm text-muted-foreground max-w-[220px]">
-                  Enter account balance, risk %, entry and stop loss to see your
-                  position size.
+                <p className="text-sm text-muted-foreground max-w-[240px]">
+                  Select an instrument and enter position size, entry, and stop
+                  loss to see your calculations.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* ── Risk Section ── */}
-                <SectionLabel>Risk</SectionLabel>
-
+                {/* Pip Value */}
+                <SectionLabel>Pip Value</SectionLabel>
                 <ResultCard
-                  label="Risk Amount"
-                  value={fmtMoney(results.riskAmount)}
-                  highlight
+                  label="Base Pip Value (per $100)"
+                  value={`$${results.basePipValue}`}
+                  sub={`${instrument} base rate`}
                 />
                 <ResultCard
-                  label="Loss if SL Hits"
-                  value={`-${fmtMoney(results.riskAmount)}`}
+                  label="Scaled Pip Value"
+                  value={fmtPipValue(results.pipValue)}
+                  sub={`${results.basePipValue} × (${positionSize} ÷ 100)`}
+                  highlight
+                />
+
+                {/* Stop Loss */}
+                <SectionLabel>Stop Loss</SectionLabel>
+                <ResultCard
+                  label="SL Distance"
+                  value={fmtPips(results.stopLossPips)}
+                />
+                <ResultCard
+                  label="Potential Loss"
+                  value={`-${fmtMoney(results.potentialLoss)}`}
+                  sub={`${fmtPipValue(results.pipValue)} × ${fmtPips(results.stopLossPips)}`}
                   negative
                 />
 
-                {/* ── Stop Loss Section ── */}
-                <SectionLabel>Stop Loss</SectionLabel>
-
-                <ResultCard
-                  label="Stop Loss Distance"
-                  value={fmtPips(results.stopLossDistancePips)}
-                />
-                <ResultCard
-                  label="Pip Value"
-                  value={
-                    results.assetType === "crypto"
-                      ? "—"
-                      : fmtPipValue(results.pipValue)
-                  }
-                />
-
-                {/* ── Position Section ── */}
-                <SectionLabel>Position</SectionLabel>
-
-                <ResultCard
-                  label="Lot Size"
-                  value={
-                    results.assetType === "crypto"
-                      ? "—"
-                      : fmtLots(results.lotSize)
-                  }
-                />
-                <ResultCard
-                  label="Position Size"
-                  value={fmtUnits(
-                    results.positionSizeUnits,
-                    results.assetType,
-                    pair,
-                  )}
-                  highlight
-                />
-
-                {/* ── Take Profit Section (only when TP is entered) ── */}
+                {/* Take Profit */}
                 {results.tpValid && (
                   <>
                     <SectionLabel>Take Profit</SectionLabel>
-
                     <ResultCard
                       label="TP Distance"
-                      value={fmtPips(results.takeProfitDistancePips)}
+                      value={fmtPips(results.takeProfitPips)}
                     />
                     <ResultCard
-                      label="Potential Profit if TP Hits"
+                      label="Potential Profit"
                       value={`+${fmtMoney(results.potentialProfit)}`}
+                      sub={`${fmtPipValue(results.pipValue)} × ${fmtPips(results.takeProfitPips)}`}
                       positive
                     />
 
-                    {/* ── Risk-to-Reward ── */}
-                    <SectionLabel>Risk to Reward</SectionLabel>
-
+                    {/* Risk:Reward */}
+                    <SectionLabel>Reward to Risk</SectionLabel>
                     <div className="sm:col-span-2">
                       <ResultCard
-                        label="Risk : Reward"
+                        label="R:R Ratio"
                         value={rrLabel}
+                        sub={"TP Distance 00f7 SL Distance"}
                         accent
                       />
                     </div>
+
+                    {/* Summary row */}
+                    <SectionLabel>Summary</SectionLabel>
+                    <div className="sm:col-span-2 rounded-xl border border-border bg-muted/20 px-4 py-3 grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Loss
+                        </p>
+                        <p className="text-lg font-mono font-bold text-red-400">
+                          -{fmtMoney(results.potentialLoss, 2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">RR</p>
+                        <p className="text-lg font-mono font-bold text-violet-400">
+                          {rrLabel}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Profit
+                        </p>
+                        <p className="text-lg font-mono font-bold text-emerald-400">
+                          +{fmtMoney(results.potentialProfit, 2)}
+                        </p>
+                      </div>
+                    </div>
                   </>
+                )}
+
+                {/* High risk warning */}
+                {results.potentialLoss >
+                  Number.parseFloat(positionSize) * 0.05 && (
+                  <div
+                    data-ocid="risk_calc.risk_warning.toast"
+                    className="sm:col-span-2 flex items-start gap-3 rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium"
+                    role="alert"
+                  >
+                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>
+                      Potential loss exceeds 5% of position size. Consider
+                      tightening your stop loss.
+                    </span>
+                  </div>
                 )}
               </div>
             )}
@@ -730,17 +590,26 @@ export default function RiskCalculatorPage() {
         </Card>
       </div>
 
-      {/* Info footer */}
-      <div className="mt-5 rounded-xl bg-card border border-border px-4 py-3">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          <span className="font-semibold text-foreground">How it works:</span>{" "}
-          <span className="font-mono text-teal">Lot Size</span> = Risk Amount ÷
-          (SL Pips × Pip Value).{" "}
-          <span className="font-mono text-emerald-400">Profit</span> = TP Pips ×
-          Pip Value × Lot Size.{" "}
-          <span className="font-mono text-violet-400">RR</span> = TP Distance ÷
-          SL Distance. Pip value: Forex = $10/lot, Gold = $1/lot. Always verify
-          with your broker.
+      {/* Formula reference footer */}
+      <div className="mt-5 rounded-xl bg-card border border-border px-4 py-3 space-y-1.5">
+        <p className="text-xs font-semibold text-foreground mb-1">
+          Calculation Formulas
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          <span className="text-teal">Pip Value</span> = Base Pip Value ×
+          (Position Size ÷ 100)
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          <span className="text-red-400">Loss</span> = Pip Value × |Entry − Stop
+          Loss|
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          <span className="text-emerald-400">Profit</span> = Pip Value × |Take
+          Profit − Entry|
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          <span className="text-violet-400">RR</span> = TP Distance ÷ SL
+          Distance
         </p>
       </div>
     </div>

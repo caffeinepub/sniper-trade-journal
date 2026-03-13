@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { backendInterface } from "../backend";
+import { BrandLogo } from "./BrandLogo";
 
 export type AppPage =
   | "dashboard"
@@ -293,11 +294,7 @@ export default function AppLayout({
       <aside className="hidden lg:flex flex-col w-60 bg-sidebar border-r border-sidebar-border shrink-0">
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border">
-          <img
-            src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
-            alt="Sniper Trade Journal logo"
-            className="w-9 h-9 rounded-md object-cover shrink-0"
-          />
+          <BrandLogo className="w-9 h-9 rounded-md object-cover shrink-0" />
           <div>
             <p className="font-semibold text-sm text-sidebar-foreground leading-tight">
               Sniper Trade
@@ -376,11 +373,7 @@ export default function AppLayout({
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-sidebar border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <img
-            src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
-            alt="Sniper Trade Journal logo"
-            className="w-7 h-7 rounded-md object-cover shrink-0"
-          />
+          <BrandLogo className="w-7 h-7 rounded-md object-cover shrink-0" />
           <span className="font-semibold text-sm text-sidebar-foreground">
             Sniper Trade Journal
           </span>
@@ -407,11 +400,7 @@ export default function AppLayout({
           <aside className="relative w-64 bg-sidebar border-r border-sidebar-border flex flex-col animate-slide-in-left">
             <div className="flex items-center justify-between px-5 py-4 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
-                <img
-                  src="/assets/generated/sniper-trade-journal-logo-transparent.dim_256x256.png"
-                  alt="Sniper Trade Journal logo"
-                  className="w-7 h-7 rounded-md object-cover shrink-0"
-                />
+                <BrandLogo className="w-7 h-7 rounded-md object-cover shrink-0" />
                 <span className="font-semibold text-sm">
                   Sniper Trade Journal
                 </span>

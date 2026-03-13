@@ -51,6 +51,7 @@ interface RssNewsItem {
   url: string;
   publishedDate: string;
   institution: string;
+  categories: string[];
 }
 
 const INSTITUTIONS = [
@@ -97,22 +98,400 @@ const KEYWORD_TO_INSTITUTION: Record<string, string> = {
   "bank of japan": "Bank of Japan",
 };
 
+// ─── Financial Market Keywords ────────────────────────────────────────────────
+const FINANCIAL_KEYWORDS = [
+  // Forex
+  "USD",
+  "EUR",
+  "GBP",
+  "JPY",
+  "currency",
+  "forex",
+  "exchange rate",
+  "dollar",
+  "euro",
+  "yen",
+  "pound",
+  // Central Banks
+  "Federal Reserve",
+  "Fed",
+  "ECB",
+  "European Central Bank",
+  "Bank of England",
+  "BOE",
+  "Bank of Japan",
+  "BOJ",
+  "interest rates",
+  "rate hike",
+  "rate cut",
+  "monetary policy",
+  // Commodities
+  "gold",
+  "XAU",
+  "oil",
+  "crude",
+  "OPEC",
+  "energy prices",
+  "commodity markets",
+  // Crypto
+  "bitcoin",
+  "BTC",
+  "ethereum",
+  "ETH",
+  "crypto",
+  "cryptocurrency",
+  "blockchain",
+];
+
+function isFinanciallyRelevant(title: string, description: string): boolean {
+  const combined = `${title} ${description}`.toLowerCase();
+  return FINANCIAL_KEYWORDS.some((kw) => combined.includes(kw.toLowerCase()));
+}
+
+function calculateRelevanceScore(title: string, description: string): number {
+  const combined = `${title} ${description}`.toLowerCase();
+  return FINANCIAL_KEYWORDS.filter((kw) => combined.includes(kw.toLowerCase()))
+    .length;
+}
+
+// ─── Category Detection ────────────────────────────────────────────────────────
+function detectCategories(title: string, description: string): string[] {
+  const combined = `${title} ${description}`.toLowerCase();
+  const cats: string[] = [];
+
+  const currencyKws = [
+    "usd",
+    "eur",
+    "gbp",
+    "jpy",
+    "forex",
+    "exchange rate",
+    "central bank",
+    "monetary policy",
+  ];
+  if (currencyKws.some((kw) => combined.includes(kw))) {
+    cats.push("currency");
+  }
+
+  const commodityKws = [
+    "gold",
+    "oil",
+    "crude",
+    "opec",
+    "commodity markets",
+    "metals",
+  ];
+  if (commodityKws.some((kw) => combined.includes(kw))) {
+    cats.push("commodity");
+  }
+
+  const cryptoKws = ["bitcoin", "ethereum", "crypto", "blockchain"];
+  if (cryptoKws.some((kw) => combined.includes(kw))) {
+    cats.push("crypto");
+  }
+
+  return cats;
+}
+
+// ─── Sentiment Detection from Text ────────────────────────────────────────────
+const BULLISH_SIGNALS: Record<string, string[]> = {
+  USD: [
+    "stronger dollar",
+    "dollar rally",
+    "rate hike",
+    "fed hike",
+    "usd gains",
+    "dollar strengthens",
+    "hawkish fed",
+    "usd bullish",
+  ],
+  EUR: ["euro gains", "ecb hike", "euro rally", "stronger euro"],
+  GBP: ["pound gains", "boe hike", "sterling rally", "gbp strengthens"],
+  JPY: ["yen gains", "boj hike"],
+  Gold: [
+    "gold rally",
+    "gold gains",
+    "gold rises",
+    "bullish gold",
+    "gold surge",
+    "safe haven demand",
+  ],
+  Oil: ["oil rally", "crude gains", "opec cut", "oil rises", "energy rally"],
+  Bitcoin: [
+    "bitcoin rally",
+    "btc gains",
+    "crypto rally",
+    "bitcoin surge",
+    "btc rises",
+  ],
+  Ethereum: ["eth gains", "ethereum rally", "eth rises"],
+};
+
+const BEARISH_SIGNALS: Record<string, string[]> = {
+  USD: [
+    "weak dollar",
+    "dollar falls",
+    "dollar decline",
+    "usd weakness",
+    "dovish fed",
+    "rate cut",
+  ],
+  EUR: ["weak euro", "euro falls", "growth concerns hit euro", "ecb dovish"],
+  GBP: ["weak pound", "sterling falls", "gbp weakness", "boe cut"],
+  JPY: ["weak yen", "yen falls"],
+  Gold: ["gold falls", "gold declines", "gold drops", "bearish gold"],
+  Oil: ["oil falls", "crude drops", "oil declines", "oversupply"],
+  Bitcoin: ["bitcoin falls", "btc drops", "crypto selloff", "bitcoin decline"],
+  Ethereum: ["eth falls", "ethereum drops"],
+};
+
+function detectSentimentFromText(
+  title: string,
+  description: string,
+  asset: string,
+): "Bullish" | "Bearish" | "Neutral" {
+  const combined = `${title} ${description}`.toLowerCase();
+  const bullishKws = BULLISH_SIGNALS[asset] ?? [];
+  const bearishKws = BEARISH_SIGNALS[asset] ?? [];
+  const hasBullish = bullishKws.some((kw) => combined.includes(kw));
+  const hasBearish = bearishKws.some((kw) => combined.includes(kw));
+  if (hasBullish && hasBearish) return "Neutral";
+  if (hasBullish) return "Bullish";
+  if (hasBearish) return "Bearish";
+  return "Neutral";
+}
+
+// ─── Asset Keyword Maps (for detecting which assets an RSS item relates to) ────
+const ASSET_KEYWORDS: Record<string, string[]> = {
+  USD: ["usd", "dollar", "fed", "federal reserve", "rate hike", "rate cut"],
+  EUR: ["eur", "euro", "ecb", "european central bank"],
+  GBP: ["gbp", "pound", "sterling", "bank of england", "boe"],
+  JPY: ["jpy", "yen", "bank of japan", "boj"],
+  Gold: ["gold", "xau", "safe haven"],
+  Oil: ["oil", "crude", "opec", "energy"],
+  Bitcoin: ["bitcoin", "btc"],
+  Ethereum: ["ethereum", "eth"],
+};
+
+const FALLBACK_NEWS = [
+  {
+    id: "seed_1",
+    institution: "Goldman Sachs",
+    headline:
+      "Goldman Sachs raises USD target as Fed signals prolonged restrictive policy",
+    summary:
+      "Goldman Sachs revised their 12-month USD target upward after the Federal Reserve indicated rates will remain elevated longer than previously anticipated. Analysts cite resilient labor markets and sticky core inflation as key drivers keeping the dollar strong into mid-2026.",
+    currency: "USD",
+    sentiment: "Bullish",
+    date: "2026-03-13",
+    createdAt: BigInt(1741564800000000000),
+  },
+  {
+    id: "seed_2",
+    institution: "JPMorgan Chase",
+    headline: "JPMorgan cuts EUR forecast, ECB rate path divergence widens",
+    summary:
+      "JPMorgan lowered their EUR/USD year-end forecast to 1.04 as the ECB accelerates its easing cycle while the Fed holds firm. The growing rate differential is creating sustained selling pressure on the euro across all major pairs.",
+    currency: "EUR",
+    sentiment: "Bearish",
+    date: "2026-03-13",
+    createdAt: BigInt(1741564700000000000),
+  },
+  {
+    id: "seed_3",
+    institution: "Morgan Stanley",
+    headline: "Morgan Stanley: GBP at critical juncture ahead of BOE decision",
+    summary:
+      "Morgan Stanley issued a cautious GBP note ahead of the upcoming Bank of England rate decision, warning that any dovish surprise could push cable below 1.2500. UK inflation is cooling faster than expected, raising the probability of a cut at the next meeting.",
+    currency: "GBP",
+    sentiment: "Bearish",
+    date: "2026-03-12",
+    createdAt: BigInt(1741478400000000000),
+  },
+  {
+    id: "seed_4",
+    institution: "Federal Reserve",
+    headline:
+      "Federal Reserve minutes: No rate cuts until inflation returns to 2% target",
+    summary:
+      "Minutes from the latest FOMC meeting confirm that policymakers are in no rush to cut rates, with most members wanting additional evidence that inflation is durably declining. The hawkish tone supports the USD and pressures emerging market currencies.",
+    currency: "USD",
+    sentiment: "Bullish",
+    date: "2026-03-12",
+    createdAt: BigInt(1741478300000000000),
+  },
+  {
+    id: "seed_5",
+    institution: "European Central Bank",
+    headline:
+      "ECB signals April cut is on the table as euro zone inflation falls to 2.1%",
+    summary:
+      "ECB President Christine Lagarde confirmed that an April rate cut is being actively discussed after euro area inflation dropped to 2.1% in February 2026, the closest to target since 2021. Markets have repriced to a 90% probability of a 25bps cut next month.",
+    currency: "EUR",
+    sentiment: "Bearish",
+    date: "2026-03-11",
+    createdAt: BigInt(1741392000000000000),
+  },
+  {
+    id: "seed_6",
+    institution: "Citigroup",
+    headline:
+      "Citigroup: JPY positioning extreme, BoJ intervention risk rising sharply",
+    summary:
+      "Citigroup FX strategists flagged that speculative short JPY positioning is at multi-year extremes. With USD/JPY trading above 152, the risk of Bank of Japan verbal or physical intervention is the highest since 2024. They recommend cutting short JPY exposure significantly.",
+    currency: "JPY",
+    sentiment: "Bullish",
+    date: "2026-03-11",
+    createdAt: BigInt(1741391900000000000),
+  },
+  {
+    id: "seed_7",
+    institution: "Bank of America",
+    headline:
+      "Bank of America upgrades Gold to Overweight on geopolitical risk premium",
+    summary:
+      "Bank of America raised their Gold price target to $3,200/oz and upgraded the metal to Overweight, citing elevated geopolitical uncertainty, continued central bank buying, and expectations of eventual Fed easing supporting the precious metal.",
+    currency: "Gold",
+    sentiment: "Bullish",
+    date: "2026-03-10",
+    createdAt: BigInt(1741305600000000000),
+  },
+  {
+    id: "seed_8",
+    institution: "Goldman Sachs",
+    headline:
+      "Goldman Sachs sees Bitcoin consolidating near $90K before next leg higher",
+    summary:
+      "Goldman Sachs digital asset team published a note arguing that Bitcoin is in a healthy consolidation phase after its parabolic Q4 2025 rally. Institutional inflows through ETFs remain robust and the team maintains a $120K year-end 2026 price target.",
+    currency: "Bitcoin",
+    sentiment: "Bullish",
+    date: "2026-03-10",
+    createdAt: BigInt(1741305500000000000),
+  },
+  {
+    id: "seed_9",
+    institution: "JPMorgan Chase",
+    headline:
+      "JPMorgan: Oil market tighter than expected, Brent to reach $95 by Q2 2026",
+    summary:
+      "JPMorgan commodity analysts revised their Brent crude forecast upward to $95/barrel for Q2 2026, citing OPEC+ supply discipline, stronger-than-expected global demand, and disruption risks in key producer regions.",
+    currency: "Oil",
+    sentiment: "Bullish",
+    date: "2026-03-09",
+    createdAt: BigInt(1741219200000000000),
+  },
+  {
+    id: "seed_10",
+    institution: "Bank of England",
+    headline: "Bank of England holds rates but opens door to May cut",
+    summary:
+      "The Bank of England voted 6-3 to keep rates at 5.0% but the split decision and accompanying statement indicated a majority are prepared to cut in May if wage growth continues to moderate. GBP sold off immediately following the announcement.",
+    currency: "GBP",
+    sentiment: "Bearish",
+    date: "2026-03-09",
+    createdAt: BigInt(1741219100000000000),
+  },
+  {
+    id: "seed_11",
+    institution: "Bank of Japan",
+    headline:
+      "Bank of Japan signals next hike could come as early as June 2026",
+    summary:
+      "BoJ Governor Ueda stated that the central bank is on track to normalize monetary policy and hinted at a possible rate hike at the June meeting if wage negotiations confirm a sustained rise in real wages. USD/JPY dropped 200 pips on the headline.",
+    currency: "JPY",
+    sentiment: "Bullish",
+    date: "2026-03-08",
+    createdAt: BigInt(1741132800000000000),
+  },
+  {
+    id: "seed_12",
+    institution: "International Monetary Fund",
+    headline:
+      "IMF warns of fragmented global trade risks, downgrades 2026 growth outlook",
+    summary:
+      "The IMF cut its 2026 global GDP growth forecast by 0.3 percentage points to 3.0%, citing rising trade fragmentation, sticky inflation in advanced economies, and tighter financial conditions.",
+    currency: "USD",
+    sentiment: "Neutral",
+    date: "2026-03-08",
+    createdAt: BigInt(1741132700000000000),
+  },
+  {
+    id: "seed_13",
+    institution: "Morgan Stanley",
+    headline:
+      "Morgan Stanley turns bullish on Ethereum ahead of major protocol upgrade",
+    summary:
+      "Morgan Stanley digital assets research initiated a positive outlook on Ethereum following the announcement of a major protocol efficiency upgrade due in Q2 2026. The upgrade is expected to reduce transaction costs by 40% and attract significant new DeFi activity, with a price target of $4,500.",
+    currency: "Ethereum",
+    sentiment: "Bullish",
+    date: "2026-03-07",
+    createdAt: BigInt(1741046400000000000),
+  },
+  {
+    id: "seed_14",
+    institution: "World Bank",
+    headline:
+      "World Bank raises emerging market growth forecasts on commodity tailwinds",
+    summary:
+      "The World Bank upgraded growth projections for commodity-exporting emerging markets after sustained high commodity prices boosted export revenues. Countries like Brazil, South Africa, and Indonesia are expected to outperform.",
+    currency: "Gold",
+    sentiment: "Bullish",
+    date: "2026-03-07",
+    createdAt: BigInt(1741046300000000000),
+  },
+  {
+    id: "seed_15",
+    institution: "Citigroup",
+    headline:
+      "Citigroup: EUR/USD to test 1.02 parity if ECB cuts twice before June",
+    summary:
+      "Citi FX desk published a bearish EUR scenario analysis showing EUR/USD could retest parity levels if the ECB delivers two rate cuts before June 2026 while the Fed remains on hold. They recommend adding EUR/USD shorts on any bounce toward 1.0700.",
+    currency: "EUR",
+    sentiment: "Bearish",
+    date: "2026-03-06",
+    createdAt: BigInt(1740960000000000000),
+  },
+  {
+    id: "seed_16",
+    institution: "Bank of America",
+    headline:
+      "Bank of America: USD/JPY breakout above 155 would accelerate yen depreciation",
+    summary:
+      "Bank of America technical and macro teams jointly published a note warning that a confirmed break above 155 in USD/JPY could trigger accelerated yen selling as stop losses cluster between 155 and 157. They expect the BoJ to verbally intervene first before committing FX reserves.",
+    currency: "JPY",
+    sentiment: "Bearish",
+    date: "2026-03-06",
+    createdAt: BigInt(1740959900000000000),
+  },
+] as const;
+
 const RSS_FEEDS = [
   {
-    url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GS,JPM,MS,C,BAC&region=US&lang=en-US",
-    source: "Yahoo Finance",
+    url: "https://feeds.bbci.co.uk/news/business/rss.xml",
+    source: "BBC Business",
+  },
+  {
+    url: "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+    source: "CNBC Markets",
   },
   {
     url: "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
     source: "MarketWatch",
   },
   {
-    url: "https://www.cnbc.com/id/10000664/device/rss/rss.html",
-    source: "CNBC",
+    url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GS,JPM,MS,C,BAC&region=US&lang=en-US",
+    source: "Yahoo Finance",
+  },
+  {
+    url: "https://rss.cnn.com/rss/money_news_international.rss",
+    source: "CNN Money",
   },
 ];
 
-const CORS_PROXY = "https://api.allorigins.win/get?url=";
+const CORS_PROXIES = [
+  "https://api.allorigins.win/get?url=",
+  "https://corsproxy.io/?",
+];
 
 // Category helpers
 function getMarketCategory(
@@ -153,7 +532,7 @@ const SENTIMENT_STYLES: Record<string, string> = {
   Neutral: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
 };
 
-const ARCHIVE_THRESHOLD_DAYS = 30;
+const ARCHIVE_THRESHOLD_DAYS = 14;
 
 function isArchived(dateStr: string): boolean {
   const date = new Date(dateStr);
@@ -162,6 +541,10 @@ function isArchived(dateStr: string): boolean {
 }
 
 type TabType = "all" | "currencies" | "commodities" | "crypto" | "archive";
+
+type DisplayItem =
+  | { type: "backend"; item: InstitutionalNews }
+  | { type: "rss"; item: RssNewsItem };
 
 function NewsCardSkeleton() {
   return (
@@ -189,7 +572,13 @@ function SentimentIcon({ sentiment }: { sentiment: string }) {
   return <Minus className="h-3.5 w-3.5" />;
 }
 
-function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
+function SentimentStrip({
+  news,
+  rssNews,
+}: {
+  news: InstitutionalNews[];
+  rssNews: RssNewsItem[];
+}) {
   const recentCutoff = Date.now() - 60 * 86400000;
   const recent = news.filter((n) => new Date(n.date).getTime() > recentCutoff);
 
@@ -204,6 +593,7 @@ function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
     { label: "Ethereum", key: "Ethereum" },
   ];
 
+  // Build sentiment map from backend items
   const sentimentMap: Record<string, Record<string, number>> = {};
   for (const item of recent) {
     const mkt = item.currency;
@@ -211,6 +601,24 @@ function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
       sentimentMap[mkt] = { Bullish: 0, Bearish: 0, Neutral: 0 };
     sentimentMap[mkt][item.sentiment] =
       (sentimentMap[mkt][item.sentiment] ?? 0) + 1;
+  }
+
+  // Also factor in RSS items — detect which assets they relate to, then compute sentiment
+  for (const rssItem of rssNews) {
+    const combined = `${rssItem.headline} ${rssItem.summary}`.toLowerCase();
+    for (const asset of assets) {
+      const assetKws = ASSET_KEYWORDS[asset.key] ?? [];
+      if (!assetKws.some((kw) => combined.includes(kw))) continue;
+      const sentiment = detectSentimentFromText(
+        rssItem.headline,
+        rssItem.summary,
+        asset.key,
+      );
+      if (!sentimentMap[asset.key])
+        sentimentMap[asset.key] = { Bullish: 0, Bearish: 0, Neutral: 0 };
+      sentimentMap[asset.key][sentiment] =
+        (sentimentMap[asset.key][sentiment] ?? 0) + 1;
+    }
   }
 
   const getDominant = (key: string): string => {
@@ -232,7 +640,7 @@ function SentimentStrip({ news }: { news: InstitutionalNews[] }) {
           Institutional Sentiment Engine
         </span>
         <span className="text-xs text-muted-foreground ml-1">
-          — aggregated from recent reports
+          — aggregated from recent reports &amp; live RSS
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -517,9 +925,27 @@ async function fetchFeedItems(
   feedUrl: string,
   source: string,
 ): Promise<RssNewsItem[]> {
-  const resp = await fetch(CORS_PROXY + encodeURIComponent(feedUrl));
-  const data = await resp.json();
-  const xmlStr: string = data.contents ?? "";
+  let xmlStr = "";
+
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    const proxy = CORS_PROXIES[i];
+    try {
+      const resp = await fetch(proxy + encodeURIComponent(feedUrl));
+      if (!resp.ok) continue;
+      if (proxy.includes("allorigins")) {
+        const data = await resp.json();
+        xmlStr = data.contents ?? "";
+      } else {
+        xmlStr = await resp.text();
+      }
+      if (xmlStr) break;
+    } catch {
+      // Try next proxy
+    }
+  }
+
+  if (!xmlStr) return [];
+
   const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
   const items = Array.from(doc.querySelectorAll("item"));
   const results: RssNewsItem[] = [];
@@ -534,11 +960,13 @@ async function fetchFeedItems(
 
     if (!title || !link) continue;
 
-    const combined = `${title} ${description}`.toLowerCase();
-    const matches = INSTITUTIONAL_KEYWORDS.some((kw) => combined.includes(kw));
-    if (!matches) continue;
+    // ── Financial relevance filter ────────────────────────────────────────────
+    const score = calculateRelevanceScore(title, description);
+    if (score < 1 || !isFinanciallyRelevant(title, description)) continue;
 
     const institution = detectInstitution(`${title} ${description}`);
+    const categories = detectCategories(title, description);
+
     results.push({
       id: `rss_${source}_${index}`,
       headline: title,
@@ -547,6 +975,7 @@ async function fetchFeedItems(
       url: link,
       publishedDate: pubDate,
       institution,
+      categories,
     });
     index++;
   }
@@ -555,8 +984,8 @@ async function fetchFeedItems(
 
 export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const { actor, isFetching: actorFetching } = useActor();
-  const [news, setNews] = useState<InstitutionalNews[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [news, setNews] = useState<InstitutionalNews[]>([...FALLBACK_NEWS]);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("all");
@@ -602,8 +1031,13 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
         seen.add(item.url);
         return true;
       });
-      // Re-assign stable ids after dedup
-      const withIds = unique.map((item, i) => ({ ...item, id: `rss_${i}` }));
+      // Sort by date descending (newest first)
+      const sorted = unique.sort((a, b) => {
+        const ta = a.publishedDate ? new Date(a.publishedDate).getTime() : 0;
+        const tb = b.publishedDate ? new Date(b.publishedDate).getTime() : 0;
+        return tb - ta;
+      });
+      const withIds = sorted.map((item, i) => ({ ...item, id: `rss_${i}` }));
       setRssNews(withIds);
     } catch (err) {
       console.error("RSS fetch failed:", err);
@@ -616,8 +1050,20 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   useEffect(() => {
     if (!actor || actorFetching) return;
     setLoading(true);
-    Promise.all([fetchNews(), fetchRssNews()]).finally(() => setLoading(false));
+    fetchNews().finally(() => setLoading(false));
+    fetchRssNews(); // fire and forget — rssFetching handles its own state
   }, [actor, actorFetching, fetchNews, fetchRssNews]);
+
+  // Auto-refresh RSS every 10 minutes
+  useEffect(() => {
+    const interval = setInterval(
+      () => {
+        fetchRssNews();
+      },
+      10 * 60 * 1000,
+    );
+    return () => clearInterval(interval);
+  }, [fetchRssNews]);
 
   const handleRefresh = async () => {
     if (!actor) return;
@@ -650,25 +1096,24 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     }
   };
 
-  const filtered = useMemo(() => {
+  // ── Backend items filtered by tab + filter bar ──────────────────────────────
+  const filteredBackend = useMemo(() => {
     return news.filter((item) => {
-      if (
-        activeTab === "currencies" &&
-        getMarketCategory(item.currency) !== "currency"
-      )
-        return false;
-      if (
-        activeTab === "commodities" &&
-        getMarketCategory(item.currency) !== "commodity"
-      )
-        return false;
-      if (
-        activeTab === "crypto" &&
-        getMarketCategory(item.currency) !== "crypto"
-      )
-        return false;
-      if (activeTab === "archive" && !isArchived(item.date)) return false;
-      if (activeTab === "all" && isArchived(item.date)) return false;
+      const cat = getMarketCategory(item.currency);
+      const archived = isArchived(item.date);
+
+      if (activeTab === "archive") {
+        if (!archived) return false;
+      } else if (activeTab === "currencies") {
+        if (cat !== "currency" || archived) return false;
+      } else if (activeTab === "commodities") {
+        if (cat !== "commodity" || archived) return false;
+      } else if (activeTab === "crypto") {
+        if (cat !== "crypto" || archived) return false;
+      } else {
+        // all tab — exclude archived
+        if (archived) return false;
+      }
 
       if (filterMarket !== "all" && item.currency !== filterMarket)
         return false;
@@ -699,64 +1144,82 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     search,
   ]);
 
-  const sorted = useMemo(
-    () =>
-      [...filtered].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      ),
-    [filtered],
-  );
+  // ── RSS items filtered by tab + search ─────────────────────────────────────
+  const filteredRss = useMemo(() => {
+    // Archive tab: no RSS (RSS is always fresh)
+    if (activeTab === "archive") return [];
 
-  // Combined display: backend sorted items + RSS items (RSS shown in "all" tab only)
-  const combinedItems = useMemo(() => {
-    if (activeTab !== "all") {
-      // Only show backend items for non-all tabs
-      return { backend: sorted, rss: [] };
-    }
-    // In "all" tab, merge and sort all by date
-    const backendItems = sorted.map((item) => ({
-      type: "backend" as const,
-      date: new Date(item.date).getTime(),
-      item,
-    }));
-    const rssItems = rssNews.map((item) => ({
+    return rssNews.filter((item) => {
+      // Tab-based category filter
+      if (activeTab === "currencies" && !item.categories.includes("currency"))
+        return false;
+      if (activeTab === "commodities" && !item.categories.includes("commodity"))
+        return false;
+      if (activeTab === "crypto" && !item.categories.includes("crypto"))
+        return false;
+
+      // Text search
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        if (
+          !item.headline.toLowerCase().includes(q) &&
+          !item.summary.toLowerCase().includes(q)
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [rssNews, activeTab, search]);
+
+  // ── Merged + sorted display list ───────────────────────────────────────────
+  const combinedItems = useMemo((): DisplayItem[] => {
+    const backendItems: DisplayItem[] = filteredBackend
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map((item) => ({ type: "backend" as const, item }));
+
+    const rssItems: DisplayItem[] = filteredRss.map((item) => ({
       type: "rss" as const,
-      date: item.publishedDate ? new Date(item.publishedDate).getTime() : 0,
       item,
     }));
-    const merged = [...backendItems, ...rssItems].sort(
-      (a, b) => b.date - a.date,
-    );
-    return {
-      backend: merged
-        .filter((m) => m.type === "backend")
-        .map((m) => m.item as InstitutionalNews),
-      rss: merged
-        .filter((m) => m.type === "rss")
-        .map((m) => m.item as RssNewsItem),
-      merged,
-    };
-  }, [sorted, rssNews, activeTab]);
 
-  const tabCounts = useMemo(
-    () => ({
-      all: news.filter((n) => !isArchived(n.date)).length + rssNews.length,
-      currencies: news.filter(
-        (n) =>
-          getMarketCategory(n.currency) === "currency" && !isArchived(n.date),
-      ).length,
-      commodities: news.filter(
-        (n) =>
-          getMarketCategory(n.currency) === "commodity" && !isArchived(n.date),
-      ).length,
-      crypto: news.filter(
-        (n) =>
-          getMarketCategory(n.currency) === "crypto" && !isArchived(n.date),
-      ).length,
+    // Merge and sort all by date
+    const all = [...backendItems, ...rssItems].sort((a, b) => {
+      const da =
+        a.type === "backend"
+          ? new Date(a.item.date).getTime()
+          : a.item.publishedDate
+            ? new Date(a.item.publishedDate).getTime()
+            : 0;
+      const db =
+        b.type === "backend"
+          ? new Date(b.item.date).getTime()
+          : b.item.publishedDate
+            ? new Date(b.item.publishedDate).getTime()
+            : 0;
+      return db - da;
+    });
+    return all;
+  }, [filteredBackend, filteredRss]);
+
+  const tabCounts = useMemo(() => {
+    const nonArchived = news.filter((n) => !isArchived(n.date));
+    return {
+      all: nonArchived.length + rssNews.length,
+      currencies:
+        nonArchived.filter((n) => getMarketCategory(n.currency) === "currency")
+          .length +
+        rssNews.filter((r) => r.categories.includes("currency")).length,
+      commodities:
+        nonArchived.filter((n) => getMarketCategory(n.currency) === "commodity")
+          .length +
+        rssNews.filter((r) => r.categories.includes("commodity")).length,
+      crypto:
+        nonArchived.filter((n) => getMarketCategory(n.currency) === "crypto")
+          .length +
+        rssNews.filter((r) => r.categories.includes("crypto")).length,
       archive: news.filter((n) => isArchived(n.date)).length,
-    }),
-    [news, rssNews],
-  );
+    };
+  }, [news, rssNews]);
 
   const TABS: { key: TabType; label: string }[] = [
     { key: "all", label: "All" },
@@ -766,13 +1229,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
     { key: "archive", label: "Archive" },
   ];
 
-  const totalDisplayCount =
-    activeTab === "all" ? sorted.length + rssNews.length : sorted.length;
-
-  const isEmpty =
-    !loading &&
-    sorted.length === 0 &&
-    (activeTab !== "all" || rssNews.length === 0);
+  const isEmpty = !loading && combinedItems.length === 0;
 
   return (
     <div className="space-y-6">
@@ -821,7 +1278,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       </div>
 
       {/* Sentiment Strip */}
-      {!loading && news.length > 0 && <SentimentStrip news={news} />}
+      {!loading && <SentimentStrip news={news} rssNews={rssNews} />}
 
       {/* RSS fetch status */}
       {rssFetching && !loading && (
@@ -960,10 +1417,10 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       {/* Results count */}
       {!loading && (
         <p className="text-xs text-muted-foreground">
-          Showing {totalDisplayCount} report
-          {totalDisplayCount !== 1 ? "s" : ""}
-          {activeTab === "all" && rssNews.length > 0
-            ? ` (${sorted.length} curated + ${rssNews.length} live RSS)`
+          Showing {combinedItems.length} report
+          {combinedItems.length !== 1 ? "s" : ""}
+          {activeTab === "all" && filteredRss.length > 0
+            ? ` (${filteredBackend.length} curated + ${filteredRss.length} live RSS)`
             : ""}
           {(filterMarket !== "all" ||
             filterInstitution !== "all" ||
@@ -998,243 +1455,171 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             {news.length === 0 && rssNews.length === 0
               ? "No institutional reports found. Try refreshing to fetch the latest news."
               : activeTab === "archive"
-                ? "No archived reports. Items older than 30 days appear here."
+                ? `No archived reports. Items older than ${ARCHIVE_THRESHOLD_DAYS} days appear here.`
                 : "Try adjusting your filters or search query."}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Backend items (non-all tabs show only these) */}
-          {activeTab !== "all"
-            ? sorted.map((item, idx) => {
-                const archived = isArchived(item.date);
-                const cat = getMarketCategory(item.currency);
-                const instColor =
-                  INSTITUTION_COLORS[item.institution] ??
-                  "bg-muted text-muted-foreground border-border";
-                const sentColor =
-                  SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
-                const mktColor = MARKET_TAG_STYLES[cat];
-                return (
-                  <Card
-                    key={item.id}
-                    className="bg-card border-border hover:border-teal/40 transition-colors group"
-                    data-ocid={`institutional.item.${idx + 1}`}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${instColor}`}
-                          >
-                            {item.institution}
-                          </Badge>
-                          {archived && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
-                            >
-                              <Archive className="h-3 w-3 mr-1" />
-                              Archive
-                            </Badge>
-                          )}
-                        </div>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
-                            onClick={() => handleDelete(item.id)}
-                            data-ocid={`institutional.delete_button.${idx + 1}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                      <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
-                        {item.headline}
-                      </h3>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                        {item.summary}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-1.5 flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${mktColor}`}
-                          >
-                            {item.currency}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${sentColor} flex items-center gap-1`}
-                          >
-                            <SentimentIcon sentiment={item.sentiment} />
-                            {item.sentiment}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-muted-foreground/60">
-                          {item.date}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            : /* All tab: merged backend + RSS */
-              combinedItems.merged?.map((entry, idx) => {
-                if (entry.type === "backend") {
-                  const item = entry.item as InstitutionalNews;
-                  const archived = isArchived(item.date);
-                  const cat = getMarketCategory(item.currency);
-                  const instColor =
-                    INSTITUTION_COLORS[item.institution] ??
-                    "bg-muted text-muted-foreground border-border";
-                  const sentColor =
-                    SENTIMENT_STYLES[item.sentiment] ??
-                    SENTIMENT_STYLES.Neutral;
-                  const mktColor = MARKET_TAG_STYLES[cat];
-                  return (
-                    <Card
-                      key={item.id}
-                      className="bg-card border-border hover:border-teal/40 transition-colors group"
-                      data-ocid={`institutional.item.${idx + 1}`}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs border ${instColor}`}
-                            >
-                              {item.institution}
-                            </Badge>
-                            {archived && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
-                              >
-                                <Archive className="h-3 w-3 mr-1" />
-                                Archive
-                              </Badge>
-                            )}
-                          </div>
-                          {isAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
-                              onClick={() => handleDelete(item.id)}
-                              data-ocid={`institutional.delete_button.${idx + 1}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                        <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
-                          {item.headline}
-                        </h3>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                          {item.summary}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <div className="flex gap-1.5 flex-wrap">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs border ${mktColor}`}
-                            >
-                              {item.currency}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs border ${sentColor} flex items-center gap-1`}
-                            >
-                              <SentimentIcon sentiment={item.sentiment} />
-                              {item.sentiment}
-                            </Badge>
-                          </div>
-                          <span className="text-xs text-muted-foreground/60">
-                            {item.date}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                }
-                // RSS item
-                const rssItem = entry.item as RssNewsItem;
-                const instColor =
-                  rssItem.institution && INSTITUTION_COLORS[rssItem.institution]
-                    ? INSTITUTION_COLORS[rssItem.institution]
-                    : "bg-muted text-muted-foreground border-border";
-                const pubDateStr = rssItem.publishedDate
-                  ? new Date(rssItem.publishedDate).toLocaleDateString(
-                      "en-US",
-                      {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      },
-                    )
-                  : "";
-                return (
-                  <Card
-                    key={rssItem.id}
-                    className="bg-card border-border hover:border-teal/40 transition-colors"
-                    data-ocid={`institutional.item.${idx + 1}`}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {rssItem.institution && (
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${instColor}`}
-                          >
-                            {rssItem.institution}
-                          </Badge>
-                        )}
+          {combinedItems.map((entry, idx) => {
+            if (entry.type === "backend") {
+              const item = entry.item;
+              const archived = isArchived(item.date);
+              const cat = getMarketCategory(item.currency);
+              const instColor =
+                INSTITUTION_COLORS[item.institution] ??
+                "bg-muted text-muted-foreground border-border";
+              const sentColor =
+                SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
+              const mktColor = MARKET_TAG_STYLES[cat];
+              return (
+                <Card
+                  key={item.id}
+                  className="bg-card border-border hover:border-teal/40 transition-colors group"
+                  data-ocid={`institutional.item.${idx + 1}`}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         <Badge
                           variant="outline"
-                          className="text-xs border border-teal/40 text-teal flex items-center gap-1"
+                          className={`text-xs border ${instColor}`}
                         >
-                          <Rss className="h-3 w-3" />
-                          RSS
+                          {item.institution}
                         </Badge>
-                      </div>
-                      <a
-                        href={rssItem.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-semibold text-foreground hover:text-teal cursor-pointer line-clamp-2 block"
-                      >
-                        {rssItem.headline}
-                      </a>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      {rssItem.summary && (
-                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                          {rssItem.summary}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          {rssItem.source}
-                        </span>
-                        {pubDateStr && (
-                          <span className="text-xs text-muted-foreground/60">
-                            {pubDateStr}
-                          </span>
+                        {archived && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
+                          >
+                            <Archive className="h-3 w-3 mr-1" />
+                            Archive
+                          </Badge>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
+                          onClick={() => handleDelete(item.id)}
+                          data-ocid={`institutional.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
+                      {item.headline}
+                    </h3>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                      {item.summary}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={`text-xs border ${mktColor}`}
+                        >
+                          {item.currency}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs border ${sentColor} flex items-center gap-1`}
+                        >
+                          <SentimentIcon sentiment={item.sentiment} />
+                          {item.sentiment}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">
+                        {item.date}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            // RSS item
+            const rssItem = entry.item;
+            const instColor =
+              rssItem.institution && INSTITUTION_COLORS[rssItem.institution]
+                ? INSTITUTION_COLORS[rssItem.institution]
+                : "bg-muted text-muted-foreground border-border";
+            const pubDateStr = rssItem.publishedDate
+              ? new Date(rssItem.publishedDate).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "";
+            // Show category tags on RSS cards
+            const primaryCat = rssItem.categories[0] ?? "macro";
+            const catStyle =
+              MARKET_TAG_STYLES[primaryCat] ?? MARKET_TAG_STYLES.macro;
+            return (
+              <Card
+                key={rssItem.id}
+                className="bg-card border-border hover:border-teal/40 transition-colors"
+                data-ocid={`institutional.item.${idx + 1}`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {rssItem.institution && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs border ${instColor}`}
+                      >
+                        {rssItem.institution}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="text-xs border border-teal/40 text-teal flex items-center gap-1"
+                    >
+                      <Rss className="h-3 w-3" />
+                      {rssItem.source}
+                    </Badge>
+                    {rssItem.categories.length > 0 && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs border capitalize ${catStyle}`}
+                      >
+                        {primaryCat}
+                      </Badge>
+                    )}
+                  </div>
+                  <a
+                    href={rssItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-semibold text-foreground hover:text-teal cursor-pointer line-clamp-2 block"
+                  >
+                    {rssItem.headline}
+                  </a>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {rssItem.summary && (
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                      {rssItem.summary}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {rssItem.source}
+                    </span>
+                    {pubDateStr && (
+                      <span className="text-xs text-muted-foreground/60">
+                        {pubDateStr}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
