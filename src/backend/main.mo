@@ -202,10 +202,7 @@ actor {
   // Trigger seeding
   seedInstitutionalNews();
 
-  public query ({ caller }) func getInstitutionalNews() : async [InstitutionalNews] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view institutional news");
-    };
+  public query func getInstitutionalNews() : async [InstitutionalNews] {
     institutionalNews.values().toArray();
   };
 
@@ -242,11 +239,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getInstitutionalSentimentSummary() : async [SentimentSummary] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view sentiment summary");
-    };
-
+  public query func getInstitutionalSentimentSummary() : async [SentimentSummary] {
     let currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CHF", "NZD"];
     let newsArray = institutionalNews.values().toArray();
 

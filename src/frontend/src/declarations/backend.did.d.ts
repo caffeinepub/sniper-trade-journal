@@ -175,6 +175,24 @@ export interface _CaffeineStorageRefillResult {
   'success' : [] | [boolean],
   'topped_up_amount' : [] | [bigint],
 }
+export interface InstitutionalNews {
+  'id' : string,
+  'institution' : string,
+  'headline' : string,
+  'summary' : string,
+  'currency' : string,
+  'sentiment' : string,
+  'date' : string,
+  'createdAt' : bigint,
+}
+export interface InstitutionalNewsInput {
+  'institution' : string,
+  'headline' : string,
+  'summary' : string,
+  'currency' : string,
+  'sentiment' : string,
+  'date' : string,
+}
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
   '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
@@ -209,6 +227,9 @@ export interface _SERVICE {
   'getExtendedAnalytics' : ActorMethod<[], ExtendedAnalytics>,
   'getTradeById' : ActorMethod<[string], [] | [Trade]>,
   'getTrades' : ActorMethod<[], Array<Trade>>,
+  'createInstitutionalNews' : ActorMethod<[InstitutionalNewsInput], InstitutionalNews>,
+  'deleteInstitutionalNews' : ActorMethod<[string], boolean>,
+  'getInstitutionalNews' : ActorMethod<[], Array<InstitutionalNews>>,
   'getUniqueTags' : ActorMethod<[], Array<string>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isAdminAssigned' : ActorMethod<[], boolean>,

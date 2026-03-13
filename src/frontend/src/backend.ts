@@ -257,6 +257,24 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+export interface InstitutionalNews {
+    id: string;
+    institution: string;
+    headline: string;
+    summary: string;
+    currency: string;
+    sentiment: string;
+    date: string;
+    createdAt: bigint;
+}
+export interface InstitutionalNewsInput {
+    institution: string;
+    headline: string;
+    summary: string;
+    currency: string;
+    sentiment: string;
+    date: string;
+}
 export interface backendInterface {
     _caffeineStorageBlobIsLive(hash: Uint8Array): Promise<boolean>;
     _caffeineStorageBlobsToDelete(): Promise<Array<Uint8Array>>;
@@ -282,6 +300,9 @@ export interface backendInterface {
     getExtendedAnalytics(): Promise<ExtendedAnalytics>;
     getTradeById(id: string): Promise<Trade | null>;
     getTrades(): Promise<Array<Trade>>;
+    createInstitutionalNews(input: InstitutionalNewsInput): Promise<InstitutionalNews>;
+    deleteInstitutionalNews(id: string): Promise<boolean>;
+    getInstitutionalNews(): Promise<Array<InstitutionalNews>>;
     getUniqueTags(): Promise<Array<string>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isAdminAssigned(): Promise<boolean>;
@@ -627,6 +648,33 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getTrades();
             return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async createInstitutionalNews(input: InstitutionalNewsInput): Promise<InstitutionalNews> {
+        try {
+            const result = await this.actor.createInstitutionalNews(input as any);
+            return result as unknown as InstitutionalNews;
+        } catch (error) {
+            if (this.processError) this.processError(error);
+            throw error;
+        }
+    }
+    async deleteInstitutionalNews(id: string): Promise<boolean> {
+        try {
+            const result = await this.actor.deleteInstitutionalNews(id);
+            return result;
+        } catch (error) {
+            if (this.processError) this.processError(error);
+            throw error;
+        }
+    }
+    async getInstitutionalNews(): Promise<Array<InstitutionalNews>> {
+        try {
+            const result = await this.actor.getInstitutionalNews();
+            return result as unknown as Array<InstitutionalNews>;
+        } catch (error) {
+            if (this.processError) this.processError(error);
+            throw error;
         }
     }
     async getUniqueTags(): Promise<Array<string>> {

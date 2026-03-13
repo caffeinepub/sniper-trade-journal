@@ -295,7 +295,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const fetchNews = useCallback(async () => {
     if (!actor) return;
     try {
-      const result = await (actor as any).getInstitutionalNews();
+      const result = await actor.getInstitutionalNews();
       setNews(result);
     } catch {
       toast.error("Failed to load institutional news");
@@ -319,7 +319,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const handleAddNews = async (input: InstitutionalNewsInput) => {
     if (!actor) return;
     try {
-      await (actor as any).createInstitutionalNews(input);
+      await actor.createInstitutionalNews(input);
       await fetchNews();
       toast.success("News added successfully");
     } catch {
@@ -331,7 +331,7 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
   const handleDelete = async (id: string) => {
     if (!actor) return;
     try {
-      await (actor as any).deleteInstitutionalNews(id);
+      await actor.deleteInstitutionalNews(id);
       setNews((prev) => prev.filter((n) => n.id !== id));
       toast.success("News deleted");
     } catch {

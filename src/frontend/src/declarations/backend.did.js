@@ -19,6 +19,24 @@ export const _CaffeineStorageRefillResult = IDL.Record({
   'success' : IDL.Opt(IDL.Bool),
   'topped_up_amount' : IDL.Opt(IDL.Nat),
 });
+export const InstitutionalNews = IDL.Record({
+  'id' : IDL.Text,
+  'institution' : IDL.Text,
+  'headline' : IDL.Text,
+  'summary' : IDL.Text,
+  'currency' : IDL.Text,
+  'sentiment' : IDL.Text,
+  'date' : IDL.Text,
+  'createdAt' : IDL.Int,
+});
+export const InstitutionalNewsInput = IDL.Record({
+  'institution' : IDL.Text,
+  'headline' : IDL.Text,
+  'summary' : IDL.Text,
+  'currency' : IDL.Text,
+  'sentiment' : IDL.Text,
+  'date' : IDL.Text,
+});
 export const UserStats = IDL.Record({
   'totalTrades' : IDL.Nat,
   'avgRR' : IDL.Float64,
@@ -221,6 +239,9 @@ export const idlService = IDL.Service({
   'getExtendedAnalytics' : IDL.Func([], [ExtendedAnalytics], ['query']),
   'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
   'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
+  'createInstitutionalNews' : IDL.Func([InstitutionalNewsInput], [InstitutionalNews], []),
+  'deleteInstitutionalNews' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'getInstitutionalNews' : IDL.Func([], [IDL.Vec(InstitutionalNews)], ['query']),
   'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
@@ -247,6 +268,24 @@ export const idlFactory = ({ IDL }) => {
   const _CaffeineStorageRefillResult = IDL.Record({
     'success' : IDL.Opt(IDL.Bool),
     'topped_up_amount' : IDL.Opt(IDL.Nat),
+  });
+  const InstitutionalNews = IDL.Record({
+    'id' : IDL.Text,
+    'institution' : IDL.Text,
+    'headline' : IDL.Text,
+    'summary' : IDL.Text,
+    'currency' : IDL.Text,
+    'sentiment' : IDL.Text,
+    'date' : IDL.Text,
+    'createdAt' : IDL.Int,
+  });
+  const InstitutionalNewsInput = IDL.Record({
+    'institution' : IDL.Text,
+    'headline' : IDL.Text,
+    'summary' : IDL.Text,
+    'currency' : IDL.Text,
+    'sentiment' : IDL.Text,
+    'date' : IDL.Text,
   });
   const UserStats = IDL.Record({
     'totalTrades' : IDL.Nat,
@@ -454,6 +493,9 @@ export const idlFactory = ({ IDL }) => {
     'getExtendedAnalytics' : IDL.Func([], [ExtendedAnalytics], ['query']),
     'getTradeById' : IDL.Func([IDL.Text], [IDL.Opt(Trade)], ['query']),
     'getTrades' : IDL.Func([], [IDL.Vec(Trade)], ['query']),
+    'createInstitutionalNews' : IDL.Func([InstitutionalNewsInput], [InstitutionalNews], []),
+    'deleteInstitutionalNews' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'getInstitutionalNews' : IDL.Func([], [IDL.Vec(InstitutionalNews)], ['query']),
     'getUniqueTags' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
