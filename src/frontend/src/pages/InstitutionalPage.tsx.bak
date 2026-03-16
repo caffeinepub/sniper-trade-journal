@@ -25,16 +25,12 @@ import { useActor } from "@/hooks/useActor";
 import {
   Archive,
   Building2,
-  CalendarDays,
-  Crown,
   Loader2,
   Minus,
   Plus,
   RefreshCw,
   Rss,
   Search,
-  Sparkles,
-  Star,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -42,15 +38,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { InstitutionalNews, InstitutionalNewsInput } from "../backend.d";
-import CurrencyPairImpactPanel from "../components/CurrencyPairImpactPanel";
-import EconomicCalendar from "../components/EconomicCalendar";
-import MacroSummaryStrip from "../components/MacroSummaryStrip";
-import MarketNarrativePanel from "../components/MarketNarrativePanel";
-import {
-  detectMarketNarrative,
-  getSourceTier,
-  isForecastArticle,
-} from "../utils/macroIntelligence";
 import {
   type AssetSentimentResult,
   computeAssetSentiments,
@@ -470,7 +457,7 @@ const SENTIMENT_STYLES: Record<string, string> = {
   Neutral: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
 };
 
-const ARCHIVE_THRESHOLD_DAYS = 3;
+const ARCHIVE_THRESHOLD_DAYS = 14;
 
 function isArchived(dateStr: string): boolean {
   const date = new Date(dateStr);
@@ -478,13 +465,7 @@ function isArchived(dateStr: string): boolean {
   return now.getTime() - date.getTime() > ARCHIVE_THRESHOLD_DAYS * 86400000;
 }
 
-type TabType =
-  | "all"
-  | "currencies"
-  | "commodities"
-  | "crypto"
-  | "archive"
-  | "calendar";
+type TabType = "all" | "currencies" | "commodities" | "crypto" | "archive";
 
 type DisplayItem =
   | { type: "backend"; item: InstitutionalNews }
@@ -1096,143 +1077,33 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
 
   // ── Merged + sorted display list ───────────────────────────────────────────
   const combinedItems = useMemo((): DisplayItem[] => {
-    const getTime = (item: DisplayItem): number => {
-      if (item.type === "backend") return new Date(item.item.date).getTime();
-      return item.item.publishedDate
-        ? new Date(item.item.publishedDate).getTime()
-        : 0;
-    };
-
-    const backendItems: DisplayItem[] = filteredBackend.map((item) => ({
-      type: "backend" as const,
-      item,
-    }));
+    const backendItems: DisplayItem[] = filteredBackend
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map((item) => ({ type: "backend" as const, item }));
 
     const rssItems: DisplayItem[] = filteredRss.map((item) => ({
       type: "rss" as const,
       item,
     }));
 
-    // Merge and sort newest first
-    const all = [...backendItems, ...rssItems].sort(
-      (a, b) => getTime(b) - getTime(a),
-    );
-
-    // ── Balanced coverage for the All tab ──────────────────────────────────
-    // Ensure at least 3 articles per category (currency, commodity, crypto)
-    if (activeTab === "all") {
-      const MIN_PER_CATEGORY = 3;
-      const categories: Array<"currency" | "commodity" | "crypto"> = [
-        "currency",
-        "commodity",
-        "crypto",
-      ];
-
-      const getRssCategory = (item: RssNewsItem): string[] => item.categories;
-      const getBackendCategory = (item: InstitutionalNews): string =>
-        getMarketCategory(item.currency);
-
-      const getCategoriesOfDisplay = (d: DisplayItem): string[] => {
-        if (d.type === "backend") return [getBackendCategory(d.item)];
-        return getRssCategory(d.item);
-      };
-
-      // Count current coverage per category
-      const coverageCounts: Record<string, number> = {
-        currency: 0,
-        commodity: 0,
-        crypto: 0,
-      };
-      for (const d of all) {
-        for (const cat of getCategoriesOfDisplay(d)) {
-          if (cat in coverageCounts) coverageCounts[cat]++;
-        }
-      }
-
-      // For any category below minimum, pull older backend articles (up to 7 days old) to fill gaps
-      const supplemented = [...all];
-      for (const cat of categories) {
-        const deficit = MIN_PER_CATEGORY - coverageCounts[cat];
-        if (deficit > 0) {
-          // Find older backend articles in this category not already in the list
-          const alreadyIds = new Set(
-            supplemented
-              .filter((d) => d.type === "backend")
-              .map(
-                (d) =>
-                  (d as { type: "backend"; item: InstitutionalNews }).item.id,
-              ),
-          );
-          const older = news
-            .filter((n) => {
-              if (alreadyIds.has(n.id)) return false;
-              if (getBackendCategory(n) !== cat) return false;
-              const age = Date.now() - new Date(n.date).getTime();
-              return age <= 7 * 86400000; // up to 7 days old
-            })
-            .sort(
-              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-            )
-            .slice(0, deficit);
-          for (const n of older) {
-            supplemented.push({ type: "backend" as const, item: n });
-          }
-        }
-      }
-
-      // Re-sort after supplementation
-      return supplemented.sort((a, b) => getTime(b) - getTime(a));
-    }
-
+    // Merge and sort all by date
+    const all = [...backendItems, ...rssItems].sort((a, b) => {
+      const da =
+        a.type === "backend"
+          ? new Date(a.item.date).getTime()
+          : a.item.publishedDate
+            ? new Date(a.item.publishedDate).getTime()
+            : 0;
+      const db =
+        b.type === "backend"
+          ? new Date(b.item.date).getTime()
+          : b.item.publishedDate
+            ? new Date(b.item.publishedDate).getTime()
+            : 0;
+      return db - da;
+    });
     return all;
-  }, [filteredBackend, filteredRss, activeTab, news]);
-
-  // ── Computed sentiments for macro panels ──────────────────────────────────
-  const computedSentiments = useMemo(() => {
-    return computeAssetSentiments(
-      news.map((n) => ({
-        id: n.id,
-        headline: n.headline,
-        summary: n.summary ?? "",
-        currency: n.currency,
-        sentiment: n.sentiment,
-        institution: n.institution,
-      })),
-      rssNews.map((r) => ({
-        id: r.id,
-        title: r.headline,
-        description: r.summary ?? "",
-        source: r.source ?? "",
-      })),
-    );
-  }, [news, rssNews]);
-
-  const macroArticles = useMemo(() => {
-    const backendItems = news.map((n) => ({
-      id: n.id,
-      headline: n.headline,
-      summary: n.summary ?? "",
-      source: n.institution ?? "",
-      institution: n.institution,
-      categories: [getMarketCategory(n.currency)],
-      date: n.date,
-    }));
-    const rssItems = rssNews.map((r) => ({
-      id: r.id,
-      headline: r.headline,
-      summary: r.summary ?? "",
-      source: r.source ?? "",
-      institution: r.institution,
-      categories: r.categories,
-      publishedDate: r.publishedDate,
-    }));
-    return [...backendItems, ...rssItems];
-  }, [news, rssNews]);
-
-  const marketNarrative = useMemo(
-    () => detectMarketNarrative(macroArticles, computedSentiments),
-    [macroArticles, computedSentiments],
-  );
+  }, [filteredBackend, filteredRss]);
 
   const tabCounts = useMemo(() => {
     const nonArchived = news.filter((n) => !isArchived(n.date));
@@ -1251,33 +1122,21 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
           .length +
         rssNews.filter((r) => r.categories.includes("crypto")).length,
       archive: news.filter((n) => isArchived(n.date)).length,
-      calendar: 0,
     };
   }, [news, rssNews]);
 
-  const TABS: { key: TabType; label: string; icon?: React.ReactNode }[] = [
+  const TABS: { key: TabType; label: string }[] = [
     { key: "all", label: "All" },
     { key: "currencies", label: "Currencies" },
     { key: "commodities", label: "Commodities" },
     { key: "crypto", label: "Crypto" },
     { key: "archive", label: "Archive" },
-    {
-      key: "calendar",
-      label: "Calendar",
-      icon: <CalendarDays className="h-3.5 w-3.5" />,
-    },
   ];
 
   const isEmpty = !loading && combinedItems.length === 0;
 
   return (
     <div className="space-y-6">
-      {/* Macro Summary Strip */}
-      <MacroSummaryStrip
-        sentiments={computedSentiments}
-        articles={macroArticles}
-      />
-
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -1325,14 +1184,6 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
       {/* Sentiment Strip */}
       {!loading && <SentimentStrip news={news} rssNews={rssNews} />}
 
-      {/* Market Narrative Panel */}
-      {!loading && <MarketNarrativePanel narrative={marketNarrative} />}
-
-      {/* Currency Pair Impact Panel */}
-      {!loading && computedSentiments.length > 0 && (
-        <CurrencyPairImpactPanel sentiments={computedSentiments} />
-      )}
-
       {/* RSS fetch status */}
       {rssFetching && !loading && (
         <div
@@ -1355,19 +1206,16 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             data-ocid={`institutional.${tab.key}.tab`}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.key
                 ? "bg-teal btn-teal-text"
                 : "bg-card border border-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            {tab.icon && tab.icon}
             {tab.label}
-            {tab.key !== "calendar" && (
-              <span className="ml-0.5 text-xs opacity-70">
-                ({tabCounts[tab.key as Exclude<TabType, "calendar">] ?? 0})
-              </span>
-            )}
+            <span className="ml-1.5 text-xs opacity-70">
+              ({tabCounts[tab.key]})
+            </span>
           </button>
         ))}
       </div>
@@ -1488,252 +1336,196 @@ export default function InstitutionalPage({ isAdmin }: InstitutionalPageProps) {
         </p>
       )}
 
-      {/* Calendar Tab */}
-      {activeTab === "calendar" && <EconomicCalendar />}
-
       {/* News Grid */}
-      {activeTab !== "calendar" &&
-        (loading ? (
-          <div
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            data-ocid="institutional.loading_state"
-          >
-            {["sk1", "sk2", "sk3", "sk4", "sk5", "sk6"].map((k) => (
-              <NewsCardSkeleton key={k} />
-            ))}
-          </div>
-        ) : isEmpty ? (
-          <div
-            data-ocid="institutional.empty_state"
-            className="flex flex-col items-center justify-center gap-3 py-16 text-center border border-dashed border-border rounded-xl"
-          >
-            <Building2 className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-muted-foreground font-medium">
-              No institutional news available at the moment.
-            </p>
-            <p className="text-xs text-muted-foreground/60">
-              {news.length === 0 && rssNews.length === 0
-                ? "No institutional reports found. Try refreshing to fetch the latest news."
-                : activeTab === "archive"
-                  ? `No archived reports. Items older than ${ARCHIVE_THRESHOLD_DAYS} days appear here.`
-                  : "Try adjusting your filters or search query."}
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {combinedItems.map((entry, idx) => {
-              if (entry.type === "backend") {
-                const item = entry.item;
-                const archived = isArchived(item.date);
-                const cat = getMarketCategory(item.currency);
-                const instColor =
-                  INSTITUTION_COLORS[item.institution] ??
-                  "bg-muted text-muted-foreground border-border";
-                const sentColor =
-                  SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
-                const mktColor = MARKET_TAG_STYLES[cat];
-                const tier = getSourceTier(
-                  item.institution ?? "",
-                  item.institution ?? "",
-                );
-                const isForecast = isForecastArticle(
-                  item.headline,
-                  item.summary ?? "",
-                );
-                return (
-                  <Card
-                    key={item.id}
-                    className={`bg-card border-border hover:border-teal/40 transition-colors group ${tier === 1 ? "border-amber-500/30" : ""}`}
-                    data-ocid={`institutional.item.${idx + 1}`}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${instColor}`}
-                          >
-                            {item.institution}
-                          </Badge>
-                          {tier === 1 && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border border-amber-500/50 bg-amber-500/10 text-amber-400 flex items-center gap-1"
-                            >
-                              <Crown className="h-3 w-3" />
-                              Institutional Signal
-                            </Badge>
-                          )}
-                          {isForecast && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border border-purple-500/40 bg-purple-500/10 text-purple-400 flex items-center gap-1"
-                            >
-                              <Sparkles className="h-3 w-3" />
-                              Forecast
-                            </Badge>
-                          )}
-                          {archived && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
-                            >
-                              <Archive className="h-3 w-3 mr-1" />
-                              Archive
-                            </Badge>
-                          )}
-                        </div>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
-                            onClick={() => handleDelete(item.id)}
-                            data-ocid={`institutional.delete_button.${idx + 1}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                      <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
-                        {item.headline}
-                      </h3>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                        {item.summary}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-1.5 flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${mktColor}`}
-                          >
-                            {item.currency}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs border ${sentColor} flex items-center gap-1`}
-                          >
-                            <SentimentIcon sentiment={item.sentiment} />
-                            {item.sentiment}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-muted-foreground/60">
-                          {item.date}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              }
-
-              // RSS item
-              const rssItem = entry.item;
+      {loading ? (
+        <div
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          data-ocid="institutional.loading_state"
+        >
+          {["sk1", "sk2", "sk3", "sk4", "sk5", "sk6"].map((k) => (
+            <NewsCardSkeleton key={k} />
+          ))}
+        </div>
+      ) : isEmpty ? (
+        <div
+          data-ocid="institutional.empty_state"
+          className="flex flex-col items-center justify-center gap-3 py-16 text-center border border-dashed border-border rounded-xl"
+        >
+          <Building2 className="h-10 w-10 text-muted-foreground/40" />
+          <p className="text-muted-foreground font-medium">
+            No institutional news available at the moment.
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            {news.length === 0 && rssNews.length === 0
+              ? "No institutional reports found. Try refreshing to fetch the latest news."
+              : activeTab === "archive"
+                ? `No archived reports. Items older than ${ARCHIVE_THRESHOLD_DAYS} days appear here.`
+                : "Try adjusting your filters or search query."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {combinedItems.map((entry, idx) => {
+            if (entry.type === "backend") {
+              const item = entry.item;
+              const archived = isArchived(item.date);
+              const cat = getMarketCategory(item.currency);
               const instColor =
-                rssItem.institution && INSTITUTION_COLORS[rssItem.institution]
-                  ? INSTITUTION_COLORS[rssItem.institution]
-                  : "bg-muted text-muted-foreground border-border";
-              const pubDateStr = rssItem.publishedDate
-                ? new Date(rssItem.publishedDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "";
-              // Show category tags on RSS cards
-              const primaryCat = rssItem.categories[0] ?? "macro";
-              const catStyle =
-                MARKET_TAG_STYLES[primaryCat] ?? MARKET_TAG_STYLES.macro;
-              const rssTier = getSourceTier(
-                rssItem.source ?? "",
-                rssItem.institution ?? "",
-              );
-              const rssIsForecast = isForecastArticle(
-                rssItem.headline,
-                rssItem.summary ?? "",
-              );
+                INSTITUTION_COLORS[item.institution] ??
+                "bg-muted text-muted-foreground border-border";
+              const sentColor =
+                SENTIMENT_STYLES[item.sentiment] ?? SENTIMENT_STYLES.Neutral;
+              const mktColor = MARKET_TAG_STYLES[cat];
               return (
                 <Card
-                  key={rssItem.id}
-                  className={`bg-card border-border hover:border-teal/40 transition-colors ${rssTier === 1 ? "border-amber-500/30" : ""}`}
+                  key={item.id}
+                  className="bg-card border-border hover:border-teal/40 transition-colors group"
                   data-ocid={`institutional.item.${idx + 1}`}
                 >
                   <CardHeader className="pb-2">
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {rssItem.institution && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         <Badge
                           variant="outline"
                           className={`text-xs border ${instColor}`}
                         >
-                          {rssItem.institution}
+                          {item.institution}
                         </Badge>
-                      )}
-                      {rssTier === 2 && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border border-blue-500/40 bg-blue-500/10 text-blue-400 flex items-center gap-1"
+                        {archived && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border border-muted-foreground/30 text-muted-foreground/60"
+                          >
+                            <Archive className="h-3 w-3 mr-1" />
+                            Archive
+                          </Badge>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-trade-loss hover:bg-trade-loss/10 shrink-0"
+                          onClick={() => handleDelete(item.id)}
+                          data-ocid={`institutional.delete_button.${idx + 1}`}
                         >
-                          <Star className="h-3 w-3" />
-                          Tier 2
-                        </Badge>
-                      )}
-                      {rssIsForecast && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border border-purple-500/40 bg-purple-500/10 text-purple-400 flex items-center gap-1"
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          Forecast
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className="text-xs border border-teal/40 text-teal flex items-center gap-1"
-                      >
-                        <Rss className="h-3 w-3" />
-                        {rssItem.source}
-                      </Badge>
-                      {rssItem.categories.length > 0 && (
-                        <Badge
-                          variant="outline"
-                          className={`text-xs border capitalize ${catStyle}`}
-                        >
-                          {primaryCat}
-                        </Badge>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       )}
                     </div>
-                    <a
-                      href={rssItem.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-semibold text-foreground hover:text-teal cursor-pointer line-clamp-2 block"
-                    >
-                      {rssItem.headline}
-                    </a>
+                    <h3 className="text-sm font-semibold text-foreground line-clamp-2 mt-2">
+                      {item.headline}
+                    </h3>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    {rssItem.summary && (
-                      <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                        {rssItem.summary}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                      {item.summary}
+                    </p>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">
-                        {rssItem.source}
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={`text-xs border ${mktColor}`}
+                        >
+                          {item.currency}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs border ${sentColor} flex items-center gap-1`}
+                        >
+                          <SentimentIcon sentiment={item.sentiment} />
+                          {item.sentiment}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">
+                        {item.date}
                       </span>
-                      {pubDateStr && (
-                        <span className="text-xs text-muted-foreground/60">
-                          {pubDateStr}
-                        </span>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
               );
-            })}
-          </div>
-        ))}
+            }
+
+            // RSS item
+            const rssItem = entry.item;
+            const instColor =
+              rssItem.institution && INSTITUTION_COLORS[rssItem.institution]
+                ? INSTITUTION_COLORS[rssItem.institution]
+                : "bg-muted text-muted-foreground border-border";
+            const pubDateStr = rssItem.publishedDate
+              ? new Date(rssItem.publishedDate).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "";
+            // Show category tags on RSS cards
+            const primaryCat = rssItem.categories[0] ?? "macro";
+            const catStyle =
+              MARKET_TAG_STYLES[primaryCat] ?? MARKET_TAG_STYLES.macro;
+            return (
+              <Card
+                key={rssItem.id}
+                className="bg-card border-border hover:border-teal/40 transition-colors"
+                data-ocid={`institutional.item.${idx + 1}`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {rssItem.institution && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs border ${instColor}`}
+                      >
+                        {rssItem.institution}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="text-xs border border-teal/40 text-teal flex items-center gap-1"
+                    >
+                      <Rss className="h-3 w-3" />
+                      {rssItem.source}
+                    </Badge>
+                    {rssItem.categories.length > 0 && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs border capitalize ${catStyle}`}
+                      >
+                        {primaryCat}
+                      </Badge>
+                    )}
+                  </div>
+                  <a
+                    href={rssItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-semibold text-foreground hover:text-teal cursor-pointer line-clamp-2 block"
+                  >
+                    {rssItem.headline}
+                  </a>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {rssItem.summary && (
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
+                      {rssItem.summary}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {rssItem.source}
+                    </span>
+                    {pubDateStr && (
+                      <span className="text-xs text-muted-foreground/60">
+                        {pubDateStr}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {isAdmin && (
         <AddNewsModal

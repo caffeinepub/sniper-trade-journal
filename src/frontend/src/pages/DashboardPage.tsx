@@ -10,6 +10,14 @@ import {
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import {
+  detectMarketNarrative,
+  getCurrencyPairImpacts,
+} from "@/utils/macroIntelligence";
+import {
+  type AssetSentimentResult,
+  computeAssetSentiments,
+} from "@/utils/sentimentEngine";
+import {
   computeEquityCurve,
   computePsychStats,
   computeRMultipleDistribution,
@@ -46,7 +54,6 @@ import {
 import type {
   ExtendedAnalytics,
   InstitutionalNews,
-  SentimentSummary,
   Trade,
   TradeSegment,
 } from "../backend.d";
@@ -273,27 +280,65 @@ function SentimentIcon({ sentiment }: { sentiment: string }) {
   return <Minus className="h-3 w-3" />;
 }
 
+interface RssArticle {
+  id: string;
+  title: string;
+  description: string;
+  source: string;
+}
+
 function InstitutionalSentimentWidget({
   onNavigate,
 }: { onNavigate?: (page: string) => void }) {
   const { actor, isFetching: actorFetching } = useActor();
-  const [summary, setSummary] = useState<SentimentSummary[]>([]);
   const [latestNews, setLatestNews] = useState<InstitutionalNews[]>([]);
+  const [rssArticles, setRssArticles] = useState<RssArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!actor) return;
     try {
-      const [sentResult, newsResult] = await Promise.all([
-        (actor as any).getInstitutionalSentimentSummary(),
-        (actor as any).getInstitutionalNews(),
-      ]);
-      setSummary(sentResult ?? []);
+      const newsResult = await (actor as any).getInstitutionalNews();
       const sorted = (newsResult ?? []).sort(
         (a: InstitutionalNews, b: InstitutionalNews) =>
           new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
-      setLatestNews(sorted.slice(0, 1));
+      setLatestNews(sorted);
+    } catch {
+      // silent
+    }
+    // Fetch RSS feeds for live sentiment data
+    try {
+      const feeds = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent("https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F,BTC-USD,EURUSD=X&region=US&lang=en-US")}`,
+        `https://api.allorigins.win/get?url=${encodeURIComponent("https://feeds.finance.yahoo.com/rss/2.0/headline?s=GBPUSD=X,JPY=X&region=US&lang=en-US")}`,
+      ];
+      const rssResults = await Promise.allSettled(
+        feeds.map((url) => fetch(url).then((r) => r.json())),
+      );
+      const parsed: RssArticle[] = [];
+      for (const res of rssResults) {
+        if (res.status !== "fulfilled") continue;
+        const xml: string = res.value?.contents ?? "";
+        const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+        let idx = 0;
+        for (const match of itemMatches) {
+          const block = match[1];
+          const title =
+            (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ??
+              block.match(/<title>(.*?)<\/title>/))?.[1] ?? "";
+          const desc =
+            (block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) ??
+              block.match(/<description>(.*?)<\/description>/))?.[1] ?? "";
+          parsed.push({
+            id: `rss_dash_${idx++}`,
+            title,
+            description: desc,
+            source: "Yahoo Finance",
+          });
+        }
+      }
+      setRssArticles(parsed);
     } catch {
       // silent
     }
@@ -305,28 +350,37 @@ function InstitutionalSentimentWidget({
     fetchData().finally(() => setLoading(false));
   }, [actor, actorFetching, fetchData]);
 
-  // Dominant sentiment per asset from last 60 days
-  const byCurrency = useMemo(() => {
-    const map: Record<string, { sentiment: string; count: number }> = {};
-    for (const item of summary) {
-      const cnt = Number(item.count);
-      if (!map[item.currency] || cnt > map[item.currency].count) {
-        map[item.currency] = { sentiment: item.sentiment, count: cnt };
-      }
-    }
-    return map;
-  }, [summary]);
+  const assetSentiments = useMemo(() => {
+    if (latestNews.length === 0 && rssArticles.length === 0) return [];
+    return computeAssetSentiments(
+      latestNews.map((n) => ({
+        id: n.id,
+        headline: n.headline,
+        summary: n.summary ?? "",
+        currency: n.currency,
+        sentiment: n.sentiment,
+        institution: n.institution,
+      })),
+      rssArticles,
+    );
+  }, [latestNews, rssArticles]);
 
   const grouped = useMemo(
     () => ({
-      currencies: ["USD", "EUR", "GBP", "JPY"].filter((c) => byCurrency[c]),
-      commodities: ["Gold", "Oil"].filter((c) => byCurrency[c]),
-      crypto: ["Bitcoin", "Ethereum"].filter((c) => byCurrency[c]),
+      currencies: assetSentiments.filter((a) =>
+        ["USD", "EUR", "GBP", "JPY"].includes(a.asset),
+      ),
+      commodities: assetSentiments.filter((a) =>
+        ["Gold", "Oil"].includes(a.asset),
+      ),
+      crypto: assetSentiments.filter((a) =>
+        ["Bitcoin", "Ethereum"].includes(a.asset),
+      ),
     }),
-    [byCurrency],
+    [assetSentiments],
   );
 
-  const hasData = Object.values(byCurrency).length > 0;
+  const hasData = assetSentiments.length > 0;
   const latest = latestNews[0];
 
   return (
@@ -376,7 +430,6 @@ function InstitutionalSentimentWidget({
           </p>
         ) : (
           <>
-            {/* Sentiment grid */}
             <div className="space-y-2">
               {grouped.currencies.length > 0 && (
                 <div>
@@ -384,23 +437,24 @@ function InstitutionalSentimentWidget({
                     Currencies
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {grouped.currencies.map((currency) => {
-                      const { sentiment } = byCurrency[currency];
+                    {grouped.currencies.map((result: AssetSentimentResult) => {
                       const style =
-                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                        SENTIMENT_STYLES[result.sentiment] ??
+                        SENTIMENT_STYLES.Neutral;
                       return (
                         <div
-                          key={currency}
+                          key={result.asset}
+                          title={result.basis}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
                         >
                           <span className="text-xs font-semibold text-foreground">
-                            {currency}
+                            {result.asset}
                           </span>
                           <span
                             className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
                           >
-                            <SentimentIcon sentiment={sentiment} />
-                            {sentiment}
+                            <SentimentIcon sentiment={result.sentiment} />
+                            {result.sentiment}
                           </span>
                         </div>
                       );
@@ -414,23 +468,24 @@ function InstitutionalSentimentWidget({
                     Commodities
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {grouped.commodities.map((currency) => {
-                      const { sentiment } = byCurrency[currency];
+                    {grouped.commodities.map((result: AssetSentimentResult) => {
                       const style =
-                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                        SENTIMENT_STYLES[result.sentiment] ??
+                        SENTIMENT_STYLES.Neutral;
                       return (
                         <div
-                          key={currency}
+                          key={result.asset}
+                          title={result.basis}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
                         >
                           <span className="text-xs font-semibold text-foreground">
-                            {currency}
+                            {result.asset}
                           </span>
                           <span
                             className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
                           >
-                            <SentimentIcon sentiment={sentiment} />
-                            {sentiment}
+                            <SentimentIcon sentiment={result.sentiment} />
+                            {result.sentiment}
                           </span>
                         </div>
                       );
@@ -444,23 +499,24 @@ function InstitutionalSentimentWidget({
                     Crypto
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {grouped.crypto.map((currency) => {
-                      const { sentiment } = byCurrency[currency];
+                    {grouped.crypto.map((result: AssetSentimentResult) => {
                       const style =
-                        SENTIMENT_STYLES[sentiment] ?? SENTIMENT_STYLES.Neutral;
+                        SENTIMENT_STYLES[result.sentiment] ??
+                        SENTIMENT_STYLES.Neutral;
                       return (
                         <div
-                          key={currency}
+                          key={result.asset}
+                          title={result.basis}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-background/50 border border-border"
                         >
                           <span className="text-xs font-semibold text-foreground">
-                            {currency}
+                            {result.asset}
                           </span>
                           <span
                             className={`flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${style}`}
                           >
-                            <SentimentIcon sentiment={sentiment} />
-                            {sentiment}
+                            <SentimentIcon sentiment={result.sentiment} />
+                            {result.sentiment}
                           </span>
                         </div>
                       );
@@ -468,36 +524,7 @@ function InstitutionalSentimentWidget({
                   </div>
                 </div>
               )}
-              {grouped.currencies.length === 0 &&
-                grouped.commodities.length === 0 &&
-                grouped.crypto.length === 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {Object.entries(byCurrency)
-                      .slice(0, 6)
-                      .map(([currency, { sentiment }]) => {
-                        const style =
-                          SENTIMENT_STYLES[sentiment] ??
-                          SENTIMENT_STYLES.Neutral;
-                        return (
-                          <div
-                            key={currency}
-                            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-background/50"
-                          >
-                            <span className="text-xs font-semibold text-foreground">
-                              {currency}
-                            </span>
-                            <span
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${style}`}
-                            >
-                              {sentiment}
-                            </span>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
             </div>
-            {/* Latest headline */}
             {latest && (
               <div className="border-t border-border pt-2">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
@@ -511,6 +538,77 @@ function InstitutionalSentimentWidget({
                 </p>
               </div>
             )}
+            {/* Market Narrative */}
+            {assetSentiments.length > 0 &&
+              (() => {
+                const articles = latestNews.map((n) => ({
+                  id: n.id,
+                  headline: n.headline,
+                  summary: n.summary ?? "",
+                  source: n.institution ?? "",
+                  institution: n.institution,
+                  categories: [] as string[],
+                }));
+                const narrative = detectMarketNarrative(
+                  articles,
+                  assetSentiments,
+                );
+                const pairImpacts = getCurrencyPairImpacts(assetSentiments);
+                const topPairs = [
+                  ...pairImpacts.forex.slice(0, 2),
+                  ...pairImpacts.commodities.slice(0, 1),
+                  ...pairImpacts.crypto.slice(0, 1),
+                ].slice(0, 3);
+                return (
+                  <>
+                    <div className="border-t border-border pt-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                        Market Narrative
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-foreground">
+                          {narrative.title}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1 rounded border font-medium ${
+                            narrative.confidence === "High"
+                              ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                              : narrative.confidence === "Medium"
+                                ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                                : "text-muted-foreground border-border"
+                          }`}
+                        >
+                          {narrative.confidence}
+                        </span>
+                      </div>
+                    </div>
+                    {topPairs.length > 0 && (
+                      <div className="border-t border-border pt-2">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                          Trading Implications
+                        </p>
+                        <div className="space-y-1">
+                          {topPairs.map((p) => (
+                            <div
+                              key={p.pair}
+                              className="flex items-center justify-between"
+                            >
+                              <span className="text-xs font-mono text-foreground">
+                                {p.pair}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold ${p.direction === "up" ? "text-emerald-400" : "text-red-400"}`}
+                              >
+                                {p.direction === "up" ? "↑" : "↓"} {p.reason}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
           </>
         )}
       </CardContent>
